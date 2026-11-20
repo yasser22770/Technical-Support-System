@@ -5,13 +5,14 @@ import sqlite3
 import pandas as pd
 
 # 1. إعداد قاعدة البيانات المحلية (SQLite)
-conn = sqlite3.connect('enterprise_helpdesk_theme_v1.db', check_same_thread=False)
+conn = sqlite3.connect('enterprise_helpdesk_workflow_v1.db', check_same_thread=False)
 cursor = conn.cursor()
 
 cursor.execute('''
     CREATE TABLE IF NOT EXISTS tickets (
         ticket_id TEXT PRIMARY KEY,
         customer_name TEXT,
+        customer_phone TEXT,
         device_sn TEXT,
         device_type TEXT,
         brand TEXT,
@@ -20,7 +21,8 @@ cursor.execute('''
         tech_notes TEXT,
         priority TEXT,
         decision TEXT,
-        status TEXT,
+        stage TEXT,
+        payment_status TEXT,
         ticket_date TEXT,
         technician_name TEXT,
         cost_est TEXT
@@ -28,46 +30,48 @@ cursor.execute('''
 ''')
 conn.commit()
 
-# دالة لإضافة بيانات تجريبية جاهزة للاستعراض
+
+# دالة لإضافة بيانات تجريبية موزعة على الأقسام الثلاثة
 def load_demo_data():
     sample_tickets = [
         (
-            "TK-10421", "أحمد العتيبي - قسم المحاسبة", "SN-DL-88210",
+            "TK-30101", "ريما القحطاني - قسم الحسابات", "0501122334", "SN-DL-77412",
             "حاسب محمول (Laptop)", "Dell", "4 GB | HDD تقليدي | عمر 4 سنة",
-            "بطء/تجمد", "القرص التقليدي يسبب بطئاً شديداً، يُنصح بالترقية إلى SSD فقط.",
-            "متوسطة", "ترقية عتاد (SSD)", "قيد المعالجة", "2026-11-18",
-            "ياسر الحازمي", "180 - 380 ر.س"
+            "بطء/تجمد", "القرص التقليدي يسبب بطئاً ملحوظاً، يُنصح بالترقية إلى SSD فقط.",
+            "متوسطة", "ترقية عتاد (SSD)", "قسم الحساب", "غير مدفوع", "2026-11-18",
+            "فهد المطيري", "280 ر.س"
         ),
         (
-            "TK-10422", "نورة السبيعي - الموارد البشرية", "SN-HP-55109",
+            "TK-30102", "عمر الزهراني - شؤون الموظفين", "0559988776", "SN-HP-61904",
             "حاسب مكتبي (Desktop)", "HP", "8 GB | SATA SSD | عمر 2 سنة",
             "شبكة/Wi-Fi، تعريف/برنامج", "تم تحديث تعريف كرت الشبكة وإعادة ضبط الاتصال.",
-            "عادية", "صيانة برمجية ووقائية", "مكتملة", "2026-11-19",
-            "ياسر الحازمي", "0 - 100 ر.س"
+            "عادية", "صيانة برمجية ووقائية", "قسم الصيانة", "غير مدفوع", "2026-11-19",
+            "فهد المطيري", "80 ر.س"
         ),
         (
-            "TK-10423", "خالد الحربي - المستودعات", "SN-LN-33019",
+            "TK-30103", "لينا الشهري - العمليات اللوجستية", "0544433221", "SN-LN-48290",
             "حاسب محمول (Laptop)", "Lenovo", "8 GB | HDD تقليدي | عمر 8 سنة",
-            "طقطقة قرص صلب، تعذر الإقلاع", "تلف ميكانيكي في القرص مع قدم العتاد؛ الاستبدال أوفر اقتصادياً.",
-            "عاجلة", "استبدال الجهاز", "مفتوحة", "2026-11-20",
-            "ياسر الحازمي", "2,500 - 4,800 ر.س"
+            "طقطقة قرص صلب، تعذر الإقلاع", "تلف ميكانيكي في القرص مع تقادم العتاد؛ الاستبدال أنسب عملياً.",
+            "عاجلة", "استبدال الجهاز", "قسم الاستقبال", "غير مدفوع", "2026-11-20",
+            "فهد المطيري", "3,200 ر.س"
         ),
     ]
     cursor.executemany(
-        "INSERT OR IGNORE INTO tickets VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        "INSERT OR IGNORE INTO tickets VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
         sample_tickets
     )
     conn.commit()
 
+
 # 2. إعدادات الصفحة المتجاوبة مع الجوال (Mobile-Friendly RTL)
 st.set_page_config(
-    page_title="نظام الدعم الفني وتشخيص الأعطال",
-    page_icon="🛠️",
+    page_title="نظام إدارة مركز الصيانة والدعم الفني",
+    page_icon="🏢",
     layout="centered",
     initial_sidebar_state="collapsed"
 )
 
-# 3. تنسيق الألوان والواجهة (هوية نيلية/فيروزية عصرية)
+# 3. تنسيق الهوية اللونية (أزرق داكن/نيلي + فيروزي عصري)
 st.markdown(
     """
     <style>
@@ -95,7 +99,6 @@ st.markdown(
         color: #cffafe;
         font-size: 14px;
     }
-    /* الأزرار الأساسية بلون نيلي/فيروزي واضح */
     .stButton > button[kind="primary"] {
         background: linear-gradient(135deg, #0e7490 0%, #1d4ed8 100%);
         color: #ffffff;
@@ -135,311 +138,299 @@ st.markdown(
     unsafe_allow_html=True
 )
 
-# ترويسة التطبيق الملونة
 st.markdown(
     """
     <div class="app-banner">
-        <h2>🛠️ نظام الدعم الفني وتشخيص الأعطال</h2>
-        <p>منصة ذكية وعادلة لتسجيل الأعطال وإصدار توصيات الصيانة والترقية أو الاستبدال</p>
+        <h2>🏢 نظام إدارة الصيانة والدعم الفني</h2>
+        <p>تنقل سلس بين الاستقبال والصيانة والحساب مع تشخيص تقني عادل ومتابعة كاملة</p>
     </div>
     """,
     unsafe_allow_html=True
 )
 
-user_role = st.radio(
-    "اختر الواجهة:",
-    ["فني صيانة", "مدير النظام", "نبذة عن المشروع"],
+# تهيئة القسم النشط في الجلسة لتسهيل الانتقال التلقائي أو اليدوي
+if "active_dept" not in st.session_state:
+    st.session_state.active_dept = "قسم الاستقبال"
+
+dept_options = ["قسم الاستقبال", "قسم الصيانة", "قسم الحساب"]
+selected_dept = st.radio(
+    "انتقل بين الأقسام:",
+    dept_options,
+    index=dept_options.index(st.session_state.active_dept),
     horizontal=True
 )
+st.session_state.active_dept = selected_dept
 st.markdown("---")
 
+df_all = pd.read_sql_query("SELECT * FROM tickets", conn)
+
 # ==========================================
-# الواجهة الأولى: فني الصيانة
+# 1. قسم الاستقبال (تسجيل بيانات العميل وفتح التذكرة)
 # ==========================================
-if user_role == "فني صيانة":
-    st.subheader("🔧 تسجيل وفحص جهاز")
+if selected_dept == "قسم الاستقبال":
+    st.subheader("🛎️ قسم الاستقبال — تسجيل بيانات العميل")
+    st.caption("إدخال بيانات العميل والجهاز وفتح تذكرة جديدة ثم تحويلها إلى قسم الصيانة.")
+
     ticket_id = f"TK-{random.randint(10000, 99999)}"
-    st.info(f"**رقم التذكرة الحالية:** `{ticket_id}`")
+    st.info(f"**رقم التذكرة الجديدة:** `{ticket_id}`")
 
-    with st.expander("🎫 بيانات العميل والفني (اضغط للتعديل)", expanded=True):
-        customer_name = st.text_input("اسم العميل / القسم", "سارة خالد - الموارد البشرية")
-        device_sn = st.text_input("الرقم التسلسلي للجهاز (S/N)", "SN-99281044").strip()
-        tech_person = st.text_input("اسم الفني المسؤول", "ياسر الحازمي")
-        c_p, c_d = st.columns(2)
-        with c_p:
-            priority_level = st.selectbox("الأولوية", ["عادية", "متوسطة", "عاجلة"])
-        with c_d:
-            ticket_date = st.date_input("تاريخ الفحص", datetime.now())
+    customer_name = st.text_input("اسم العميل / القسم", "ريما القحطاني - قسم الحسابات")
+    c_ph, c_sn = st.columns(2)
+    with c_ph:
+        customer_phone = st.text_input("رقم الجوال / التحويلة", "0501234567")
+    with c_sn:
+        device_sn = st.text_input("الرقم التسلسلي للجهاز (S/N)", "SN-77412908").strip()
 
-    if device_sn:
-        cursor.execute("SELECT COUNT(*), MAX(ticket_date) FROM tickets WHERE device_sn = ?", (device_sn,))
-        prev_count, last_date = cursor.fetchone()
-        if prev_count and prev_count > 0:
-            st.warning(f"⚠️ تنبيه: الجهاز (`{device_sn}`) مسجل مسبقاً ({prev_count} مرة، آخر فحص: {last_date}).")
-
-    st.markdown("#### 1️⃣ مواصفات الجهاز")
-    c_t, c_b = st.columns(2)
-    with c_t:
+    c_ty, c_br = st.columns(2)
+    with c_ty:
         device_type = st.selectbox("نوع الجهاز", ["حاسب محمول (Laptop)", "حاسب مكتبي (Desktop)", "محطة عمل (Workstation)"])
-    with c_b:
+    with c_br:
         brand = st.selectbox("الشركة المصنعة", ["Dell", "HP", "Lenovo", "Apple", "Asus", "أخرى"])
 
-    device_age = st.slider("عمر الجهاز (بالسنوات)", 0, 15, 3)
+    c_pr, c_dt = st.columns(2)
+    with c_pr:
+        priority_level = st.selectbox("الأولوية", ["عادية", "متوسطة", "عاجلة"])
+    with c_dt:
+        ticket_date = st.date_input("تاريخ الاستقبال", datetime.now())
 
-    c_r, c_s = st.columns(2)
-    with c_r:
-        ram = st.selectbox("الذاكرة (RAM)", ["4 GB", "8 GB", "16 GB", "32 GB", "64 GB"], index=1)
-    with c_s:
-        storage = st.selectbox("التخزين", ["HDD تقليدي", "SATA SSD", "NVMe M.2 SSD"])
-
-    st.markdown("#### 2️⃣ تحديد الأعطال")
-    tab1, tab2, tab3 = st.tabs(["⚙️ العتاد", "💻 النظام", "🌐 الشبكة"])
-
-    with tab1:
-        c_slow = st.checkbox("بطء ملحوظ أو تجمد متكرر")
-        c_heat = st.checkbox("ارتفاع حرارة أو صوت مروحة مرتفع")
-        c_bsod = st.checkbox("شاشة زرقاء (BSOD) أو إعادة تشغيل")
-        c_noise = st.checkbox("أصوات طقطقة ميكانيكية من القرص الصلب")
-
-    with tab2:
-        c_boot = st.checkbox("تعذر الإقلاع أو تلف ملفات النظام")
-        c_virus = st.checkbox("اشتباه برمجيات خبيثة أو إعلانات")
-        c_corrupt = st.checkbox("مشكلة في تعريف أو برنامج معين")
-
-    with tab3:
-        c_net = st.checkbox("انقطاع Wi-Fi أو ضعف الاتصال")
-        c_domain = st.checkbox("مشكلة دخول الشبكة المحلية / النطاق")
-
-    st.markdown("#### 3️⃣ ملاحظات الفني")
-    tech_notes = st.text_area(
-        "ملاحظات إضافية:",
-        placeholder="مثال: الجهاز يعمل بشكل جيد بعد إغلاق البرامج الخلفية، ويُكتفى بترقية SSD..."
+    initial_note = st.text_area(
+        "وصف المشكلة من العميل عند الاستقبال:",
+        placeholder="مثال: الجهاز بطيء عند فتح البرامج أو يحتاج فحصاً عاماً..."
     )
 
-    if st.button("🚀 تنفيذ التشخيص وحفظ التذكرة", type="primary"):
-        selected_issues = []
-        if c_slow: selected_issues.append("بطء/تجمد")
-        if c_heat: selected_issues.append("حرارة/مروحة")
-        if c_bsod: selected_issues.append("شاشة زرقاء")
-        if c_noise: selected_issues.append("طقطقة قرص صلب")
-        if c_boot: selected_issues.append("تعذر الإقلاع")
-        if c_virus: selected_issues.append("برمجيات خبيثة")
-        if c_corrupt: selected_issues.append("تعريف/برنامج")
-        if c_net: selected_issues.append("شبكة/Wi-Fi")
-        if c_domain: selected_issues.append("النطاق المحلي")
+    go_to_maint = st.checkbox("تحويل التذكرة مباشرة إلى قسم الصيانة بعد الحفظ", value=True)
 
-        issues_text = "، ".join(selected_issues) if selected_issues else "لا توجد أعطال محددة"
-        specs_text = f"{ram} | {storage} | عمر {device_age} سنة"
-        notes_clean = tech_notes.strip() if tech_notes.strip() else "لا توجد ملاحظات إضافية"
-
-        # منطق تشخيص واقعي وعادل بدون نسب تلف مبالغ فيها
-        decision = "صيانة برمجية ووقائية"
-        cost_estimate = "0 - 100 ر.س"
-        time_estimate = "1 - 2 ساعة"
-
-        if c_noise or (device_age >= 8 and c_boot):
-            decision = "استبدال الجهاز"
-            cost_estimate = "2,500 - 4,800 ر.س"
-            time_estimate = "1 - 3 أيام"
-        elif storage == "HDD تقليدي" and (c_slow or c_boot):
-            decision = "ترقية عتاد (SSD)"
-            cost_estimate = "180 - 380 ر.س"
-            time_estimate = "2 - 3 ساعات"
-        elif "4 GB" in ram and c_slow:
-            decision = "ترقية عتاد (RAM)"
-            cost_estimate = "120 - 250 ر.س"
-            time_estimate = "1 - 2 ساعة"
-        elif c_heat:
-            decision = "صيانة ميكانيكية وتنظيف حراري"
-            cost_estimate = "50 - 150 ر.س"
-            time_estimate = "1 - 2 ساعة"
+    if st.button("📥 تسجيل العميل وفتح التذكرة", type="primary"):
+        next_stage = "قسم الصيانة" if go_to_maint else "قسم الاستقبال"
+        notes_val = initial_note.strip() if initial_note.strip() else "تم تسجيل الجهاز في الاستقبال بانتظار الفحص الفني."
 
         cursor.execute('''
-            INSERT OR REPLACE INTO tickets VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            INSERT OR REPLACE INTO tickets VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ''', (
-            ticket_id, customer_name, device_sn, device_type, brand,
-            specs_text, issues_text, notes_clean, priority_level, decision,
-            "مفتوحة", str(ticket_date), tech_person, cost_estimate
+            ticket_id, customer_name, customer_phone, device_sn, device_type,
+            brand, "بانتظار فحص المواصفات", "بانتظار تحديد الأعطال", notes_val,
+            priority_level, "بانتظار التشخيص", next_stage, "غير مدفوع",
+            str(ticket_date), "غير محدد بعد", "0 ر.س"
         ))
         conn.commit()
+        st.success(f"✅ تم تسجيل التذكرة `{ticket_id}` بنجاح (المرحلة الحالية: {next_stage}).")
 
-        st.markdown("---")
-        st.subheader(f"📋 نتيجة الفحص ({ticket_id})")
-        r1, r2 = st.columns(2)
-        r1.metric("القرار المقترح", decision)
-        r2.metric("التكلفة التقديرية", cost_estimate)
+        if go_to_maint:
+            st.session_state.active_dept = "قسم الصيانة"
+            st.rerun()
 
-        r3, r4 = st.columns(2)
-        r3.metric("الوقت المتوقع", time_estimate)
-        r4.metric("الأولوية", priority_level)
-
-        if decision == "استبدال الجهاز":
-            st.error("🚨 **التوصية:** يُفضل استبدال الجهاز نظراً لوجود عطل ميكانيكي حرج أو انتهاء عمره التشغيلي.")
-        elif "ترقية" in decision:
-            st.warning("⚠️ **التوصية:** ترقية القطع المحددة ستحسّن أداء الجهاز بتكلفة مناسبة.")
-        else:
-            st.success("✅ **التوصية:** الجهاز لا يحتاج لاستبدال؛ صيانة برمجية أو تنظيف وقائي كافٍ.")
-
-        st.markdown("#### ✅ خطوات التنفيذ للفني:")
-        recs = []
-        if storage == "HDD تقليدي" and (c_slow or c_boot):
-            recs.append("نسخ البيانات احتياطياً، تركيب قرص SSD، وتثبيت النظام.")
-        if "4 GB" in ram and c_slow:
-            recs.append("فحص التوافق ورفع الذاكرة العشوائية إلى 8GB أو 16GB.")
-        if c_heat:
-            recs.append("تنظيف المراوح ومسارات التهوية وتجديد المعجون الحراري.")
-        if c_bsod or c_boot:
-            recs.append("تشغيل SFC / DISM وفحص الذاكرة والقرص الصلب.")
-        if c_virus:
-            recs.append("فحص شامل لمكافحة الفيروسات وإزالة البرامج المشبوهة.")
-        if c_corrupt:
-            recs.append("إعادة تثبيت التعريف أو البرنامج المتضرر من المصدر الرسمي.")
-        if c_net or c_domain:
-            recs.append("إعادة ضبط إعدادات الشبكة وفحص إعدادات النطاق.")
-
-        if not recs:
-            recs.append("إجراء فحص وقائي دوري وتحديثات النظام الأساسية.")
-
-        for step in recs:
-            st.checkbox(step, value=False, key=f"chk_{ticket_id}_{step[:12]}")
-
-        st.info(f"**ملاحظات الفني:** {notes_clean}")
-
-        report_content = (
-            f"رقم التذكرة: {ticket_id}\n"
-            f"التاريخ: {ticket_date}\n"
-            f"الأولوية: {priority_level}\n"
-            f"العميل: {customer_name}\n"
-            f"الفني: {tech_person}\n"
-            f"الجهاز: {device_type} - {brand} ({device_sn})\n"
-            f"المواصفات: {specs_text}\n"
-            f"الأعطال: {issues_text}\n"
-            f"القرار: {decision}\n"
-            f"التكلفة التقديرية: {cost_estimate}\n"
-            f"الوقت المتوقع: {time_estimate}\n"
-            f"ملاحظات الفني: {notes_clean}\n\n"
-            f"خطوات التنفيذ:\n" + "\n".join([f"- {x}" for x in recs])
+    st.markdown("---")
+    st.markdown("#### 📋 التذاكر المسجلة حالياً")
+    if df_all.empty:
+        st.info("لا توجد تذاكر مسجلة بعد.")
+        if st.button("✨ تعبئة بيانات تجريبية للاختبار"):
+            load_demo_data()
+            st.rerun()
+    else:
+        st.dataframe(
+            df_all[["ticket_id", "customer_name", "device_sn", "stage", "priority", "ticket_date"]],
+            use_container_width=True
         )
 
-        st.download_button(
-            label="📥 تحميل التقرير (.txt)",
-            data=report_content,
-            file_name=f"Ticket_{ticket_id}.txt",
-            mime="text/plain"
-        )
-        st.success("✅ تم حفظ التذكرة بنجاح.")
+# ==========================================
+# 2. قسم الصيانة (الفحص والتشخيص وتحويل التذكرة)
+# ==========================================
+elif selected_dept == "قسم الصيانة":
+    st.subheader("🔧 قسم الصيانة — الفحص والتشخيص الفني")
+    st.caption("اختر تذكرة لفحص الجهاز وتحديد الأعطال بدقة ونقلها إلى قسم الحساب.")
+
+    if df_all.empty:
+        st.info("📭 لا توجد تذاكر متاحة حالياً.")
+        c_b1, c_b2 = st.columns(2)
+        if c_b1.button("✨ تعبئة بيانات تجريبية"):
+            load_demo_data()
+            st.rerun()
+        if c_b2.button("🛎️ الذهاب لقسم الاستقبال"):
+            st.session_state.active_dept = "قسم الاستقبال"
+            st.rerun()
+    else:
+        ticket_labels = [
+            f"{r['ticket_id']} | {r['customer_name']} ({r['stage']})"
+            for _, r in df_all.iterrows()
+        ]
+        chosen_label = st.selectbox("اختر التذكرة للفحص:", ticket_labels)
+        chosen_id = chosen_label.split(" | ")[0].strip()
+        row = df_all[df_all["ticket_id"] == chosen_id].iloc[0]
+
+        with st.container(border=True):
+            st.write(f"**رقم التذكرة:** `{row['ticket_id']}` | **المرحلة الحالية:** `{row['stage']}`")
+            st.write(f"**العميل:** {row['customer_name']} | **الجوال:** {row['customer_phone']}")
+            st.write(f"**الجهاز:** {row['device_type']} — {row['brand']} (`{row['device_sn']}`)")
+            st.info(f"**ملاحظات سابقة:** {row['tech_notes']}")
+
+        st.markdown("#### 1️⃣ مواصفات الجهاز أثناء الفحص")
+        device_age = st.slider("عمر الجهاز (بالسنوات)", 0, 15, 3)
+        c_r, c_s = st.columns(2)
+        with c_r:
+            ram = st.selectbox("الذاكرة (RAM)", ["4 GB", "8 GB", "16 GB", "32 GB", "64 GB"], index=1)
+        with c_s:
+            storage = st.selectbox("التخزين", ["HDD تقليدي", "SATA SSD", "NVMe M.2 SSD"])
+
+        st.markdown("#### 2️⃣ تحديد الأعطال")
+        tab1, tab2, tab3 = st.tabs(["⚙️ العتاد", "💻 النظام", "🌐 الشبكة"])
+        with tab1:
+            c_slow = st.checkbox("بطء ملحوظ أو تجمد متكرر")
+            c_heat = st.checkbox("ارتفاع حرارة أو صوت مروحة مرتفع")
+            c_bsod = st.checkbox("شاشة زرقاء (BSOD) أو إعادة تشغيل")
+            c_noise = st.checkbox("أصوات طقطقة ميكانيكية من القرص الصلب")
+        with tab2:
+            c_boot = st.checkbox("تعذر الإقلاع أو تلف ملفات النظام")
+            c_virus = st.checkbox("اشتباه برمجيات خبيثة أو إعلانات")
+            c_corrupt = st.checkbox("مشكلة في تعريف أو برنامج معين")
+        with tab3:
+            c_net = st.checkbox("انقطاع Wi-Fi أو ضعف الاتصال")
+            c_domain = st.checkbox("مشكلة دخول الشبكة المحلية / النطاق")
+
+        tech_person = st.text_input("اسم فني الصيانة", value=row["technician_name"] if row["technician_name"] != "غير محدد بعد" else "فهد المطيري")
+        tech_notes = st.text_area("تقرير وملاحظات فني الصيانة:", value=row["tech_notes"])
+        send_to_billing = st.checkbox("نقل التذكرة إلى قسم الحساب بعد حفظ التشخيص", value=True)
+
+        if st.button("🛠️ حفظ التشخيص وتحديث التذكرة", type="primary"):
+            selected_issues = []
+            if c_slow: selected_issues.append("بطء/تجمد")
+            if c_heat: selected_issues.append("حرارة/مروحة")
+            if c_bsod: selected_issues.append("شاشة زرقاء")
+            if c_noise: selected_issues.append("طقطقة قرص صلب")
+            if c_boot: selected_issues.append("تعذر الإقلاع")
+            if c_virus: selected_issues.append("برمجيات خبيثة")
+            if c_corrupt: selected_issues.append("تعريف/برنامج")
+            if c_net: selected_issues.append("شبكة/Wi-Fi")
+            if c_domain: selected_issues.append("النطاق المحلي")
+
+            issues_text = "، ".join(selected_issues) if selected_issues else "لا توجد أعطال محددة"
+            specs_text = f"{ram} | {storage} | عمر {device_age} سنة"
+
+            # منطق تشخيص واقعي وعادل بدون نسب تلف مبالغ فيها
+            decision = "صيانة برمجية ووقائية"
+            cost_val = "90 ر.س"
+
+            if c_noise or (device_age >= 8 and c_boot):
+                decision = "استبدال الجهاز"
+                cost_val = "3,200 ر.س"
+            elif storage == "HDD تقليدي" and (c_slow or c_boot):
+                decision = "ترقية عتاد (SSD)"
+                cost_val = "280 ر.س"
+            elif "4 GB" in ram and c_slow:
+                decision = "ترقية عتاد (RAM)"
+                cost_val = "180 ر.س"
+            elif c_heat:
+                decision = "صيانة ميكانيكية وتنظيف حراري"
+                cost_val = "120 ر.س"
+
+            new_stage = "قسم الحساب" if send_to_billing else "قسم الصيانة"
+
+            cursor.execute('''
+                UPDATE tickets
+                SET specs_summary = ?, issues_summary = ?, tech_notes = ?,
+                    decision = ?, stage = ?, technician_name = ?, cost_est = ?
+                WHERE ticket_id = ?
+            ''', (
+                specs_text, issues_text, tech_notes.strip(),
+                decision, new_stage, tech_person.strip(), cost_val, chosen_id
+            ))
+            conn.commit()
+            st.success(f"✅ تم حفظ التشخيص ({decision}) للتذكرة `{chosen_id}`.")
+
+            if send_to_billing:
+                st.session_state.active_dept = "قسم الحساب"
+                st.rerun()
 
 # ==========================================
-# الواجهة الثانية: مدير النظام
+# 3. قسم الحساب (الفواتير، التكلفة، وحالة الدفع)
 # ==========================================
-elif user_role == "مدير النظام":
-    st.subheader("📊 لوحة تحكم مدير النظام")
+else:
+    st.subheader("💳 قسم الحساب — الفواتير واعتماد الدفع")
+    st.caption("مراجعة التكلفة، تحديث حالة الدفع، نقل التذاكر بين الأقسام، وتصدير السجلات.")
 
-    df = pd.read_sql_query("SELECT * FROM tickets", conn)
-
-    if df.empty:
-        st.info("📭 لا توجد تذاكر مسجلة حالياً.")
-        if st.button("✨ تعبئة بيانات تجريبية جاهزة للاستعراض", type="primary"):
+    if df_all.empty:
+        st.info("📭 لا توجد تذاكر مسجلة في الحساب حالياً.")
+        if st.button("✨ تعبئة بيانات تجريبية للاختبار", type="primary"):
             load_demo_data()
             st.rerun()
     else:
         m1, m2 = st.columns(2)
-        m1.metric("إجمالي التذاكر", len(df))
-        m2.metric("تذاكر مفتوحة", len(df[df["status"] == "مفتوحة"]))
+        m1.metric("إجمالي التذاكر", len(df_all))
+        m2.metric("في قسم الحساب", len(df_all[df_all["stage"] == "قسم الحساب"]))
 
         m3, m4 = st.columns(2)
-        m3.metric("تذاكر مكتملة", len(df[df["status"] == "مكتملة"]))
-        m4.metric("تذاكر عاجلة", len(df[df["priority"] == "عاجلة"]))
+        m3.metric("مدفوع", len(df_all[df_all["payment_status"] == "مدفوع"]))
+        m4.metric("غير مدفوع", len(df_all[df_all["payment_status"] == "غير مدفوع"]))
 
-        repeated_sn = df["device_sn"].value_counts()
-        repeated_sn = repeated_sn[repeated_sn > 1]
-        if not repeated_sn.empty:
-            st.warning("🔁 **أجهزة ذات تذاكر متكررة:** " + "، ".join([f"{sn} ({cnt} مرات)" for sn, cnt in repeated_sn.items()]))
+        stage_filter = st.selectbox("تصفية حسب القسم / المرحلة:", ["الكل", "قسم الاستقبال", "قسم الصيانة", "قسم الحساب"])
+        view_df = df_all if stage_filter == "الكل" else df_all[df_all["stage"] == stage_filter]
 
-        st.markdown("---")
-        search_term = st.text_input("🔎 بحث برقم التذكرة أو العميل أو S/N")
-        f1, f2 = st.columns(2)
-        decision_filter = f1.selectbox("تصفية حسب القرار", ["الكل"] + sorted(df["decision"].unique().tolist()))
-        status_filter = f2.selectbox("تصفية حسب الحالة", ["الكل"] + sorted(df["status"].unique().tolist()))
-
-        filtered_df = df.copy()
-        if search_term:
-            mask = (
-                filtered_df["ticket_id"].str.contains(search_term, case=False, na=False) |
-                filtered_df["customer_name"].str.contains(search_term, case=False, na=False) |
-                filtered_df["device_sn"].str.contains(search_term, case=False, na=False)
-            )
-            filtered_df = filtered_df[mask]
-
-        if decision_filter != "الكل":
-            filtered_df = filtered_df[filtered_df["decision"] == decision_filter]
-
-        if status_filter != "الكل":
-            filtered_df = filtered_df[filtered_df["status"] == status_filter]
-
-        st.markdown("#### 📋 سجل التذاكر")
-        st.dataframe(filtered_df, use_container_width=True)
-
-        st.markdown("#### 🔍 معاينة وتحديث تذكرة")
-        selected_ticket = st.selectbox("اختر رقم التذكرة", df["ticket_id"].tolist())
-        row = df[df["ticket_id"] == selected_ticket].iloc[0]
-
-        with st.container(border=True):
-            st.write(f"**العميل:** {row['customer_name']}")
-            st.write(f"**الجهاز:** {row['device_type']} — {row['brand']} (`{row['device_sn']}`)")
-            st.write(f"**المواصفات:** {row['specs_summary']}")
-            st.write(f"**الأعطال:** {row['issues_summary']}")
-            st.write(f"**القرار:** {row['decision']} | **التكلفة:** {row['cost_est']}")
-            st.write(f"**الحالة:** {row['status']} | **الأولوية:** {row['priority']}")
-            st.info(f"**ملاحظات الفني:** {row['tech_notes']}")
-
-        u1, u2 = st.columns(2)
-        new_status = u1.selectbox("الحالة الجديدة", ["مفتوحة", "قيد المعالجة", "مكتملة"])
-        new_priority = u2.selectbox("الأولوية الجديدة", ["عادية", "متوسطة", "عاجلة"], index=["عادية", "متوسطة", "عاجلة"].index(row["priority"]))
-        updated_notes = st.text_area("تحديث الملاحظات", value=row["tech_notes"])
-
-        if st.button("💾 حفظ التعديلات", type="primary"):
-            cursor.execute(
-                "UPDATE tickets SET status = ?, priority = ?, tech_notes = ? WHERE ticket_id = ?",
-                (new_status, new_priority, updated_notes.strip(), selected_ticket)
-            )
-            conn.commit()
-            st.success(f"تم تحديث التذكرة {selected_ticket}.")
-            st.rerun()
-
-        if st.button("🗑️ حذف التذكرة المحددة"):
-            cursor.execute("DELETE FROM tickets WHERE ticket_id = ?", (selected_ticket,))
-            conn.commit()
-            st.warning(f"تم حذف التذكرة {selected_ticket}.")
-            st.rerun()
-
-        st.markdown("---")
-        csv_data = filtered_df.to_csv(index=False).encode("utf-8-sig")
-        st.download_button(
-            label="📊 تصدير السجل بصيغة CSV",
-            data=csv_data,
-            file_name="helpdesk_tickets.csv",
-            mime="text/csv"
+        st.dataframe(
+            view_df[["ticket_id", "customer_name", "decision", "cost_est", "payment_status", "stage"]],
+            use_container_width=True
         )
 
-        if st.button("✨ إضافة بيانات تجريبية"):
-            load_demo_data()
-            st.rerun()
+        st.markdown("#### 🧾 إدارة فاتورة ونقل تذكرة")
+        bill_labels = [f"{r['ticket_id']} | {r['customer_name']}" for _, r in df_all.iterrows()]
+        bill_choice = st.selectbox("اختر التذكرة:", bill_labels)
+        bill_id = bill_choice.split(" | ")[0].strip()
+        brow = df_all[df_all["ticket_id"] == bill_id].iloc[0]
 
-        if st.button("🗑️ مسح جميع التذاكر"):
-            cursor.execute("DELETE FROM tickets")
+        with st.container(border=True):
+            st.write(f"**العميل:** {brow['customer_name']} | **الجوال:** {brow['customer_phone']}")
+            st.write(f"**الجهاز:** {brow['device_type']} — {brow['brand']} (`{brow['device_sn']}`)")
+            st.write(f"**التشخيص / القرار:** {brow['decision']}")
+            st.write(f"**المبلغ المعتمد:** `{brow['cost_est']}` | **حالة الدفع:** `{brow['payment_status']}`")
+            st.write(f"**القسم الحالي:** `{brow['stage']}` | **الفني:** {brow['technician_name']}")
+
+        c_cost, c_pay = st.columns(2)
+        with c_cost:
+            new_cost = st.text_input("المبلغ النهائي (ر.س)", value=brow["cost_est"])
+        with c_pay:
+            pay_opts = ["غير مدفوع", "مدفوع"]
+            new_pay = st.selectbox("حالة الدفع", pay_opts, index=pay_opts.index(brow["payment_status"]) if brow["payment_status"] in pay_opts else 0)
+
+        move_stage = st.selectbox(
+            "نقل التذكرة إلى قسم:",
+            ["قسم الحساب", "قسم الصيانة", "قسم الاستقبال"],
+            index=["قسم الحساب", "قسم الصيانة", "قسم الاستقبال"].index(brow["stage"]) if brow["stage"] in ["قسم الحساب", "قسم الصيانة", "قسم الاستقبال"] else 0
+        )
+
+        if st.button("💾 حفظ الفاتورة وتحديث القسم", type="primary"):
+            cursor.execute('''
+                UPDATE tickets
+                SET cost_est = ?, payment_status = ?, stage = ?
+                WHERE ticket_id = ?
+            ''', (new_cost.strip(), new_pay, move_stage, bill_id))
             conn.commit()
+            st.success(f"✅ تم تحديث التذكرة `{bill_id}` بنجاح.")
+            if move_stage != "قسم الحساب":
+                st.session_state.active_dept = move_stage
             st.rerun()
 
-# ==========================================
-# الواجهة الثالثة: نبذة عن المشروع
-# ==========================================
-else:
-    st.subheader("📌 نبذة عن المشروع")
-    st.write(
-        "تطبيق ويب متجاوب مع الجوال والحاسب لتسجيل مواصفات الأجهزة وتشخيص أعطال العتاد والنظام والشبكات، "
-        "وإصدار توصيات صيانة واقعية دون تضخيم الأعطال البسيطة."
-    )
-    st.markdown("- **واجهة مزدوجة:** لوحة لفني الصيانة ولوحة متابعة وإحصاءات لمدير النظام.")
-    st.markdown("- **قاعدة بيانات SQLite:** لحفظ التذاكر وتحديث حالاتها ورصد تكرار الأعطال.")
-    st.markdown("- **تقارير وتصدير:** تحميل تقرير فني لكل تذكرة `.txt` وتصدير السجل الكامل `.csv`.")
+        invoice_txt = (
+            f"=== فاتورة وتقرير خدمة الصيانة ===\n"
+            f"رقم التذكرة: {brow['ticket_id']}\n"
+            f"التاريخ: {brow['ticket_date']}\n"
+            f"العميل: {brow['customer_name']} ({brow['customer_phone']})\n"
+            f"الجهاز: {brow['device_type']} - {brow['brand']} ({brow['device_sn']})\n"
+            f"التشخيص: {brow['decision']}\n"
+            f"المبلغ: {new_cost}\n"
+            f"حالة الدفع: {new_pay}\n"
+            f"القسم: {move_stage}\n"
+            f"ملاحظات: {brow['tech_notes']}\n"
+        )
+
+        st.download_button(
+            label="📥 تحميل الفاتورة / التقرير (.txt)",
+            data=invoice_txt,
+            file_name=f"Invoice_{brow['ticket_id']}.txt",
+            mime="text/plain"
+        )
+
+        csv_bytes = view_df.to_csv(index=False).encode("utf-8-sig")
+        st.download_button(
+            label="📊 تصدير سجل الحسابات (.csv)",
+            data=csv_bytes,
+            file_name="billing_tickets.csv",
+            mime="text/csv"
+        )
