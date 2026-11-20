@@ -4,11 +4,11 @@ import random
 import sqlite3
 import pandas as pd
 
-# رمز الدخول الخاص بقسم المدير (يمكنك تغييره بسهولة)
+# رمز الدخول الخاص بقسم المدير
 MANAGER_PIN = "MGR-2026"
 
 # 1. إعداد قاعدة البيانات المحلية (SQLite)
-conn = sqlite3.connect('enterprise_helpdesk_workflow_v3.db', check_same_thread=False)
+conn = sqlite3.connect('enterprise_helpdesk_single_ticket_v1.db', check_same_thread=False)
 cursor = conn.cursor()
 
 cursor.execute('''
@@ -34,25 +34,32 @@ cursor.execute('''
 conn.commit()
 
 
-# دالة لإضافة بيانات تجريبية موزعة على الأقسام
+def generate_unique_ticket_id():
+    while True:
+        tid = f"TK-{random.randint(10000, 99999)}"
+        cursor.execute("SELECT 1 FROM tickets WHERE ticket_id = ?", (tid,))
+        if not cursor.fetchone():
+            return tid
+
+
 def load_demo_data():
     sample_tickets = [
         (
-            "TK-30101", "ريما القحطاني - قسم الحسابات", "0501122334", "SN-DL-77412",
+            "TK-40101", "ريما القحطاني - قسم الحسابات", "0501122334", "SN-DL-77412",
             "حاسب محمول (Laptop)", "Dell", "4 GB | HDD تقليدي | عمر 4 سنة",
             "بطء/تجمد", "القرص التقليدي يسبب بطئاً ملحوظاً، يُنصح بالترقية إلى SSD فقط.",
             "متوسطة", "ترقية عتاد (SSD)", "قسم الحساب", "غير مدفوع", "2026-11-18",
             "فهد المطيري", "280 ر.س"
         ),
         (
-            "TK-30102", "عمر الزهراني - شؤون الموظفين", "0559988776", "SN-HP-61904",
+            "TK-40102", "عمر الزهراني - شؤون الموظفين", "0559988776", "SN-HP-61904",
             "حاسب مكتبي (Desktop)", "HP", "8 GB | SATA SSD | عمر 2 سنة",
             "شبكة/Wi-Fi، تعريف/برنامج", "تم تحديث تعريف كرت الشبكة وإعادة ضبط الاتصال.",
             "عادية", "صيانة برمجية ووقائية", "قسم الصيانة", "غير مدفوع", "2026-11-19",
             "فهد المطيري", "80 ر.س"
         ),
         (
-            "TK-30103", "لينا الشهري - العمليات اللوجستية", "0544433221", "SN-LN-48290",
+            "TK-40103", "لينا الشهري - العمليات اللوجستية", "0544433221", "SN-LN-48290",
             "حاسب محمول (Laptop)", "Lenovo", "8 GB | HDD تقليدي | عمر 8 سنة",
             "طقطقة قرص صلب، تعذر الإقلاع", "تلف ميكانيكي في القرص مع تقادم العتاد؛ الاستبدال أنسب عملياً.",
             "عاجلة", "استبدال الجهاز", "قسم الاستقبال", "غير مدفوع", "2026-11-20",
@@ -141,21 +148,27 @@ st.markdown(
     unsafe_allow_html=True
 )
 
+if "active_dept" not in st.session_state:
+    st.session_state.active_dept = "قسم الاستقبال"
+
+if "draft_ticket_id" not in st.session_state:
+    st.session_state.draft_ticket_id = generate_unique_ticket_id()
+
+if "current_ticket_id" not in st.session_state:
+    st.session_state.current_ticket_id = None
+
+if "manager_unlocked" not in st.session_state:
+    st.session_state.manager_unlocked = False
+
 st.markdown(
     """
     <div class="app-banner">
         <h2>🏢 نظام إدارة الصيانة والدعم الفني</h2>
-        <p>تنقل سلس بين الاستقبال والصيانة والحساب والمدير مع تشخيص تقني عادل</p>
+        <p>تتبع موحد برقم تذكرة واحد من الاستقبال إلى الصيانة ثم الحساب</p>
     </div>
     """,
     unsafe_allow_html=True
 )
-
-if "active_dept" not in st.session_state:
-    st.session_state.active_dept = "قسم الاستقبال"
-
-if "manager_unlocked" not in st.session_state:
-    st.session_state.manager_unlocked = False
 
 dept_options = ["قسم الاستقبال", "قسم الصيانة", "قسم الحساب", "قسم المدير", "نبذة عن الموقع"]
 selected_dept = st.radio(
@@ -165,19 +178,31 @@ selected_dept = st.radio(
     horizontal=True
 )
 st.session_state.active_dept = selected_dept
-st.markdown("---")
 
 df_all = pd.read_sql_query("SELECT * FROM tickets", conn)
+
+# شريط يوضح التذكرة النشطة الحالية ورقمها الثابت أثناء الانتقال
+if st.session_state.current_ticket_id:
+    match_cur = df_all[df_all["ticket_id"] == st.session_state.current_ticket_id]
+    if not match_cur.empty:
+        cur_row = match_cur.iloc[0]
+        st.info(
+            f"**التذكرة النشطة:** `{cur_row['ticket_id']}` | "
+            f"**العميل:** {cur_row['customer_name']} | "
+            f"**القسم الحالي:** `{cur_row['stage']}`"
+        )
+
+st.markdown("---")
 
 # ==========================================
 # 1. قسم الاستقبال
 # ==========================================
 if selected_dept == "قسم الاستقبال":
     st.subheader("🛎️ قسم الاستقبال — تسجيل بيانات العميل")
-    st.caption("إدخال بيانات العميل والجهاز وفتح تذكرة جديدة ثم تحويلها إلى قسم الصيانة.")
+    st.caption("يتم إنشاء رقم تذكرة واحد ثابت يرافق العميل في الصيانة والحساب.")
 
-    ticket_id = f"TK-{random.randint(10000, 99999)}"
-    st.info(f"**رقم التذكرة الجديدة:** `{ticket_id}`")
+    active_new_id = st.session_state.draft_ticket_id
+    st.success(f"**رقم التذكرة المخصص لهذه العملية:** `{active_new_id}`")
 
     customer_name = st.text_input("اسم العميل / القسم", "ريما القحطاني - قسم الحسابات")
     c_ph, c_sn = st.columns(2)
@@ -203,29 +228,35 @@ if selected_dept == "قسم الاستقبال":
         placeholder="مثال: الجهاز بطيء عند فتح البرامج أو يحتاج فحصاً عاماً..."
     )
 
-    go_to_maint = st.checkbox("تحويل التذكرة مباشرة إلى قسم الصيانة بعد الحفظ", value=True)
+    go_to_maint = st.checkbox("نقل التذكرة بنفس الرقم إلى قسم الصيانة بعد الحفظ", value=True)
 
-    if st.button("📥 تسجيل العميل وفتح التذكرة", type="primary"):
+    if st.button("📥 حفظ التذكرة وتحويلها", type="primary"):
         next_stage = "قسم الصيانة" if go_to_maint else "قسم الاستقبال"
         notes_val = initial_note.strip() if initial_note.strip() else "تم تسجيل الجهاز في الاستقبال بانتظار الفحص الفني."
 
         cursor.execute('''
             INSERT OR REPLACE INTO tickets VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ''', (
-            ticket_id, customer_name, customer_phone, device_sn, device_type,
+            active_new_id, customer_name, customer_phone, device_sn, device_type,
             brand, "بانتظار فحص المواصفات", "بانتظار تحديد الأعطال", notes_val,
             priority_level, "بانتظار التشخيص", next_stage, "غير مدفوع",
-            str(ticket_date), "غير محدد بعد", "0 ر.س"
+            str(ticket_date), "فهد المطيري", "0 ر.س"
         ))
         conn.commit()
-        st.success(f"✅ تم تسجيل التذكرة `{ticket_id}` بنجاح (المرحلة الحالية: {next_stage}).")
+
+        # تثبيت رقم التذكرة الحالية وتجهيز رقم جديد لعميل لاحق فقط
+        st.session_state.current_ticket_id = active_new_id
+        st.session_state.draft_ticket_id = generate_unique_ticket_id()
 
         if go_to_maint:
             st.session_state.active_dept = "قسم الصيانة"
             st.rerun()
+        else:
+            st.success(f"✅ تم حفظ التذكرة برقم `{active_new_id}`.")
+            st.rerun()
 
     st.markdown("---")
-    st.markdown("#### 📋 التذاكر المسجلة حالياً")
+    st.markdown("#### 📋 التذاكر المسجلة")
     if df_all.empty:
         st.info("لا توجد تذاكر مسجلة بعد.")
         if st.button("✨ تعبئة بيانات تجريبية للاختبار"):
@@ -242,7 +273,7 @@ if selected_dept == "قسم الاستقبال":
 # ==========================================
 elif selected_dept == "قسم الصيانة":
     st.subheader("🔧 قسم الصيانة — الفحص والتشخيص الفني")
-    st.caption("اختر تذكرة لفحص الجهاز وتحديد الأعطال بدقة ونقلها إلى قسم الحساب.")
+    st.caption("فحص الجهاز وتحديد الأعطال مع الاحتفاظ بنفس رقم التذكرة ونقلها للحساب.")
 
     if df_all.empty:
         st.info("📭 لا توجد تذاكر متاحة حالياً.")
@@ -254,16 +285,21 @@ elif selected_dept == "قسم الصيانة":
             st.session_state.active_dept = "قسم الاستقبال"
             st.rerun()
     else:
-        ticket_labels = [
-            f"{r['ticket_id']} | {r['customer_name']} ({r['stage']})"
-            for _, r in df_all.iterrows()
-        ]
-        chosen_label = st.selectbox("اختر التذكرة للفحص:", ticket_labels)
-        chosen_id = chosen_label.split(" | ")[0].strip()
+        ticket_ids = df_all["ticket_id"].tolist()
+        default_idx = 0
+        if st.session_state.current_ticket_id in ticket_ids:
+            default_idx = ticket_ids.index(st.session_state.current_ticket_id)
+
+        def fmt_maint(tid):
+            r = df_all[df_all["ticket_id"] == tid].iloc[0]
+            return f"{r['ticket_id']} | {r['customer_name']} ({r['stage']})"
+
+        chosen_id = st.selectbox("اختر التذكرة للفحص:", ticket_ids, index=default_idx, format_func=fmt_maint)
+        st.session_state.current_ticket_id = chosen_id
         row = df_all[df_all["ticket_id"] == chosen_id].iloc[0]
 
         with st.container(border=True):
-            st.write(f"**رقم التذكرة:** `{row['ticket_id']}` | **المرحلة الحالية:** `{row['stage']}`")
+            st.write(f"**رقم التذكرة الثابت:** `{row['ticket_id']}` | **المرحلة الحالية:** `{row['stage']}`")
             st.write(f"**العميل:** {row['customer_name']} | **الجوال:** {row['customer_phone']}")
             st.write(f"**الجهاز:** {row['device_type']} — {row['brand']} (`{row['device_sn']}`)")
             st.info(f"**ملاحظات سابقة:** {row['tech_notes']}")
@@ -291,11 +327,11 @@ elif selected_dept == "قسم الصيانة":
             c_net = st.checkbox("انقطاع Wi-Fi أو ضعف الاتصال")
             c_domain = st.checkbox("مشكلة دخول الشبكة المحلية / النطاق")
 
-        tech_person = st.text_input("اسم فني الصيانة", value=row["technician_name"] if row["technician_name"] != "غير محدد بعد" else "فهد المطيري")
+        tech_person = st.text_input("اسم فني الصيانة", value=row["technician_name"] if row["technician_name"] else "فهد المطيري")
         tech_notes = st.text_area("تقرير وملاحظات فني الصيانة:", value=row["tech_notes"])
-        send_to_billing = st.checkbox("نقل التذكرة إلى قسم الحساب بعد حفظ التشخيص", value=True)
+        send_to_billing = st.checkbox("نقل التذكرة بنفس الرقم إلى قسم الحساب بعد الحفظ", value=True)
 
-        if st.button("🛠️ حفظ التشخيص وتحديث التذكرة", type="primary"):
+        if st.button("🛠️ حفظ التشخيص ونقل التذكرة", type="primary"):
             selected_issues = []
             if c_slow: selected_issues.append("بطء/تجمد")
             if c_heat: selected_issues.append("حرارة/مروحة")
@@ -339,10 +375,13 @@ elif selected_dept == "قسم الصيانة":
                 decision, new_stage, tech_person.strip(), cost_val, chosen_id
             ))
             conn.commit()
-            st.success(f"✅ تم حفظ التشخيص ({decision}) للتذكرة `{chosen_id}`.")
+            st.session_state.current_ticket_id = chosen_id
 
             if send_to_billing:
                 st.session_state.active_dept = "قسم الحساب"
+                st.rerun()
+            else:
+                st.success(f"✅ تم حفظ التشخيص للتذكرة `{chosen_id}`.")
                 st.rerun()
 
 # ==========================================
@@ -350,7 +389,7 @@ elif selected_dept == "قسم الصيانة":
 # ==========================================
 elif selected_dept == "قسم الحساب":
     st.subheader("💳 قسم الحساب — الفواتير واعتماد الدفع")
-    st.caption("مراجعة التكلفة، تحديث حالة الدفع، نقل التذاكر بين الأقسام، وتصدير السجلات.")
+    st.caption("استكمال معالجة التذكرة بنفس رقمها واعتماد المبلغ وحالة الدفع.")
 
     if df_all.empty:
         st.info("📭 لا توجد تذاكر مسجلة في الحساب حالياً.")
@@ -374,18 +413,26 @@ elif selected_dept == "قسم الحساب":
             use_container_width=True
         )
 
-        st.markdown("#### 🧾 إدارة فاتورة ونقل تذكرة")
-        bill_labels = [f"{r['ticket_id']} | {r['customer_name']}" for _, r in df_all.iterrows()]
-        bill_choice = st.selectbox("اختر التذكرة:", bill_labels)
-        bill_id = bill_choice.split(" | ")[0].strip()
+        st.markdown("#### 🧾 إدارة فاتورة التذكرة")
+        bill_ids = df_all["ticket_id"].tolist()
+        bill_default = 0
+        if st.session_state.current_ticket_id in bill_ids:
+            bill_default = bill_ids.index(st.session_state.current_ticket_id)
+
+        def fmt_bill(tid):
+            r = df_all[df_all["ticket_id"] == tid].iloc[0]
+            return f"{r['ticket_id']} | {r['customer_name']} ({r['stage']})"
+
+        bill_id = st.selectbox("اختر التذكرة:", bill_ids, index=bill_default, format_func=fmt_bill)
+        st.session_state.current_ticket_id = bill_id
         brow = df_all[df_all["ticket_id"] == bill_id].iloc[0]
 
         with st.container(border=True):
+            st.write(f"**رقم التذكرة الثابت:** `{brow['ticket_id']}` | **القسم الحالي:** `{brow['stage']}`")
             st.write(f"**العميل:** {brow['customer_name']} | **الجوال:** {brow['customer_phone']}")
             st.write(f"**الجهاز:** {brow['device_type']} — {brow['brand']} (`{brow['device_sn']}`)")
             st.write(f"**التشخيص / القرار:** {brow['decision']}")
             st.write(f"**المبلغ المعتمد:** `{brow['cost_est']}` | **حالة الدفع:** `{brow['payment_status']}`")
-            st.write(f"**القسم الحالي:** `{brow['stage']}` | **الفني:** {brow['technician_name']}")
 
         c_cost, c_pay = st.columns(2)
         with c_cost:
@@ -395,19 +442,19 @@ elif selected_dept == "قسم الحساب":
             new_pay = st.selectbox("حالة الدفع", pay_opts, index=pay_opts.index(brow["payment_status"]) if brow["payment_status"] in pay_opts else 0)
 
         move_stage = st.selectbox(
-            "نقل التذكرة إلى قسم:",
+            "إبقاء أو نقل التذكرة بنفس رقمها إلى:",
             ["قسم الحساب", "قسم الصيانة", "قسم الاستقبال"],
             index=["قسم الحساب", "قسم الصيانة", "قسم الاستقبال"].index(brow["stage"]) if brow["stage"] in ["قسم الحساب", "قسم الصيانة", "قسم الاستقبال"] else 0
         )
 
-        if st.button("💾 حفظ الفاتورة وتحديث القسم", type="primary"):
+        if st.button("💾 حفظ الفاتورة وتحديث التذكرة", type="primary"):
             cursor.execute('''
                 UPDATE tickets
                 SET cost_est = ?, payment_status = ?, stage = ?
                 WHERE ticket_id = ?
             ''', (new_cost.strip(), new_pay, move_stage, bill_id))
             conn.commit()
-            st.success(f"✅ تم تحديث التذكرة `{bill_id}` بنجاح.")
+            st.session_state.current_ticket_id = bill_id
             if move_stage != "قسم الحساب":
                 st.session_state.active_dept = move_stage
             st.rerun()
@@ -542,7 +589,7 @@ elif selected_dept == "قسم المدير":
 else:
     st.subheader("📌 نبذة عن الموقع")
     st.write(
-        "نظام ويب متكامل لإدارة أعمال الدعم الفني وصيانة الحاسب الآلي عبر مراحل واضحة: "
+        "نظام ويب متكامل لإدارة أعمال الدعم الفني وصيانة الحاسب الآلي برقم تذكرة واحد ثابت عبر المراحل: "
         "**الاستقبال $\leftarrow$ الصيانة $\leftarrow$ الحساب**، مع إشراف إداري في **قسم المدير** "
         "ومنطق تشخيص واقعي وعادل يحدد التوصية المناسبة (صيانة، ترقية، أو استبدال) دون تضخيم الأعطال البسيطة."
     )
@@ -553,6 +600,6 @@ else:
         st.caption("انتقل إلى تبويب «قسم المدير» وأدخل الرقم أعلاه لتجربة لوحة الإدارة والإحصاءات.")
 
     st.markdown("#### ✨ أبرز مزايا النظام:")
-    st.markdown("- **دورة عمل متكاملة:** تنقل سلس للتذكرة بين الاستقبال والصيانة والحساب.")
+    st.markdown("- **رقم تذكرة موحد:** تنتقل التذكرة بنفس الرقم بين الاستقبال والصيانة والحساب.")
     st.markdown("- **تشخيص تقني عادل:** يعتمد على نوع العطل الفعلي وعمر الجهاز ومواصفاته.")
     st.markdown("- **إدارة وتقارير:** حفظ في قاعدة بيانات SQLite، رصد تكرار الأعطال، وتصدير `.txt` و`.csv`.")
