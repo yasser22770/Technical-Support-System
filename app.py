@@ -4,8 +4,11 @@ import random
 import sqlite3
 import pandas as pd
 
+# رمز الدخول الخاص بقسم المدير (يمكنك تغييره بسهولة)
+MANAGER_PIN = "MGR-2026"
+
 # 1. إعداد قاعدة البيانات المحلية (SQLite)
-conn = sqlite3.connect('enterprise_helpdesk_workflow_v1.db', check_same_thread=False)
+conn = sqlite3.connect('enterprise_helpdesk_workflow_v3.db', check_same_thread=False)
 cursor = conn.cursor()
 
 cursor.execute('''
@@ -31,7 +34,7 @@ cursor.execute('''
 conn.commit()
 
 
-# دالة لإضافة بيانات تجريبية موزعة على الأقسام الثلاثة
+# دالة لإضافة بيانات تجريبية موزعة على الأقسام
 def load_demo_data():
     sample_tickets = [
         (
@@ -142,17 +145,19 @@ st.markdown(
     """
     <div class="app-banner">
         <h2>🏢 نظام إدارة الصيانة والدعم الفني</h2>
-        <p>تنقل سلس بين الاستقبال والصيانة والحساب مع تشخيص تقني عادل ومتابعة كاملة</p>
+        <p>تنقل سلس بين الاستقبال والصيانة والحساب والمدير مع تشخيص تقني عادل</p>
     </div>
     """,
     unsafe_allow_html=True
 )
 
-# تهيئة القسم النشط في الجلسة لتسهيل الانتقال التلقائي أو اليدوي
 if "active_dept" not in st.session_state:
     st.session_state.active_dept = "قسم الاستقبال"
 
-dept_options = ["قسم الاستقبال", "قسم الصيانة", "قسم الحساب"]
+if "manager_unlocked" not in st.session_state:
+    st.session_state.manager_unlocked = False
+
+dept_options = ["قسم الاستقبال", "قسم الصيانة", "قسم الحساب", "قسم المدير", "نبذة عن الموقع"]
 selected_dept = st.radio(
     "انتقل بين الأقسام:",
     dept_options,
@@ -165,7 +170,7 @@ st.markdown("---")
 df_all = pd.read_sql_query("SELECT * FROM tickets", conn)
 
 # ==========================================
-# 1. قسم الاستقبال (تسجيل بيانات العميل وفتح التذكرة)
+# 1. قسم الاستقبال
 # ==========================================
 if selected_dept == "قسم الاستقبال":
     st.subheader("🛎️ قسم الاستقبال — تسجيل بيانات العميل")
@@ -233,7 +238,7 @@ if selected_dept == "قسم الاستقبال":
         )
 
 # ==========================================
-# 2. قسم الصيانة (الفحص والتشخيص وتحويل التذكرة)
+# 2. قسم الصيانة
 # ==========================================
 elif selected_dept == "قسم الصيانة":
     st.subheader("🔧 قسم الصيانة — الفحص والتشخيص الفني")
@@ -341,9 +346,9 @@ elif selected_dept == "قسم الصيانة":
                 st.rerun()
 
 # ==========================================
-# 3. قسم الحساب (الفواتير، التكلفة، وحالة الدفع)
+# 3. قسم الحساب
 # ==========================================
-else:
+elif selected_dept == "قسم الحساب":
     st.subheader("💳 قسم الحساب — الفواتير واعتماد الدفع")
     st.caption("مراجعة التكلفة، تحديث حالة الدفع، نقل التذاكر بين الأقسام، وتصدير السجلات.")
 
@@ -434,3 +439,120 @@ else:
             file_name="billing_tickets.csv",
             mime="text/csv"
         )
+
+# ==========================================
+# 4. قسم المدير (محمي برقم دخول خاص)
+# ==========================================
+elif selected_dept == "قسم المدير":
+    st.subheader("🔐 قسم المدير — دخول محمي برقم خاص")
+
+    if not st.session_state.manager_unlocked:
+        st.warning("هذا القسم مخصص للمدير ولا يُفتح إلا برقم الدخول الخاص. (يمكن لمسؤول التوظيف الاطلاع على الرقم في تبويب «نبذة عن الموقع»).")
+        entered_pin = st.text_input("أدخل رقم الدخول الخاص بالمدير:", type="password", placeholder="مثال: MGR-2026")
+        if st.button("🔓 دخول إلى لوحة المدير", type="primary"):
+            if entered_pin.strip() == MANAGER_PIN:
+                st.session_state.manager_unlocked = True
+                st.success("✅ تم التحقق من رقم الدخول بنجاح.")
+                st.rerun()
+            else:
+                st.error("❌ رقم الدخول غير صحيح. راجع «نبذة عن الموقع» لمعرفة رقم الدخول المخصص للتجربة.")
+    else:
+        if st.button("🔒 قفل / خروج من قسم المدير"):
+            st.session_state.manager_unlocked = False
+            st.rerun()
+
+        st.markdown("---")
+        st.caption("عرض الإحصاءات، رصد تكرار الأجهزة، البحث والتصفية، وحذف أو مسح السجلات.")
+
+        if df_all.empty:
+            st.info("📭 لا توجد تذاكر مسجلة حالياً.")
+            if st.button("✨ تعبئة بيانات تجريبية جاهزة للاستعراض", type="primary"):
+                load_demo_data()
+                st.rerun()
+        else:
+            m1, m2 = st.columns(2)
+            m1.metric("إجمالي التذاكر", len(df_all))
+            m2.metric("تذاكر عاجلة", len(df_all[df_all["priority"] == "عاجلة"]))
+
+            m3, m4 = st.columns(2)
+            m3.metric("في الصيانة / الحساب", len(df_all[df_all["stage"].isin(["قسم الصيانة", "قسم الحساب"])]))
+            m4.metric("مدفوع", len(df_all[df_all["payment_status"] == "مدفوع"]))
+
+            repeated_sn = df_all["device_sn"].value_counts()
+            repeated_sn = repeated_sn[repeated_sn > 1]
+            if not repeated_sn.empty:
+                st.warning("🔁 **أجهزة ذات تذاكر متكررة:** " + "، ".join([f"{sn} ({cnt} مرات)" for sn, cnt in repeated_sn.items()]))
+
+            st.markdown("#### 📈 توزيع التذاكر حسب القسم")
+            st.bar_chart(df_all["stage"].value_counts())
+
+            st.markdown("#### 📈 توزيع التذاكر حسب القرار")
+            st.bar_chart(df_all["decision"].value_counts())
+
+            search_q = st.text_input("🔎 بحث برقم التذكرة أو اسم العميل أو الرقم التسلسلي")
+            f1, f2 = st.columns(2)
+            mgr_stage = f1.selectbox("تصفية بالقسم", ["الكل"] + sorted(df_all["stage"].unique().tolist()))
+            mgr_pay = f2.selectbox("تصفية بالدفع", ["الكل"] + sorted(df_all["payment_status"].unique().tolist()))
+
+            mgr_df = df_all.copy()
+            if search_q:
+                mask = (
+                    mgr_df["ticket_id"].str.contains(search_q, case=False, na=False) |
+                    mgr_df["customer_name"].str.contains(search_q, case=False, na=False) |
+                    mgr_df["device_sn"].str.contains(search_q, case=False, na=False)
+                )
+                mgr_df = mgr_df[mask]
+            if mgr_stage != "الكل":
+                mgr_df = mgr_df[mgr_df["stage"] == mgr_stage]
+            if mgr_pay != "الكل":
+                mgr_df = mgr_df[mgr_df["payment_status"] == mgr_pay]
+
+            st.dataframe(mgr_df, use_container_width=True)
+
+            mgr_labels = [f"{r['ticket_id']} | {r['customer_name']}" for _, r in df_all.iterrows()]
+            del_choice = st.selectbox("اختر تذكرة للإدارة / الحذف:", mgr_labels)
+            del_id = del_choice.split(" | ")[0].strip()
+
+            if st.button("🗑️ حذف التذكرة المحددة"):
+                cursor.execute("DELETE FROM tickets WHERE ticket_id = ?", (del_id,))
+                conn.commit()
+                st.warning(f"تم حذف التذكرة `{del_id}`.")
+                st.rerun()
+
+            csv_mgr = mgr_df.to_csv(index=False).encode("utf-8-sig")
+            st.download_button(
+                label="📊 تصدير السجل الكامل (.csv)",
+                data=csv_mgr,
+                file_name="manager_tickets_report.csv",
+                mime="text/csv"
+            )
+
+            if st.button("✨ إضافة بيانات تجريبية"):
+                load_demo_data()
+                st.rerun()
+
+            if st.button("🗑️ مسح جميع التذاكر"):
+                cursor.execute("DELETE FROM tickets")
+                conn.commit()
+                st.rerun()
+
+# ==========================================
+# 5. نبذة عن الموقع (شاملة رقم دخول المدير للتجربة)
+# ==========================================
+else:
+    st.subheader("📌 نبذة عن الموقع")
+    st.write(
+        "نظام ويب متكامل لإدارة أعمال الدعم الفني وصيانة الحاسب الآلي عبر مراحل واضحة: "
+        "**الاستقبال $\leftarrow$ الصيانة $\leftarrow$ الحساب**، مع إشراف إداري في **قسم المدير** "
+        "ومنطق تشخيص واقعي وعادل يحدد التوصية المناسبة (صيانة، ترقية، أو استبدال) دون تضخيم الأعطال البسيطة."
+    )
+
+    with st.container(border=True):
+        st.markdown("#### 🔑 بيانات دخول قسم المدير (لمسؤولي التوظيف والمستعرضين)")
+        st.write(f"**رقم الدخول الخاص بالمدير:** `{MANAGER_PIN}`")
+        st.caption("انتقل إلى تبويب «قسم المدير» وأدخل الرقم أعلاه لتجربة لوحة الإدارة والإحصاءات.")
+
+    st.markdown("#### ✨ أبرز مزايا النظام:")
+    st.markdown("- **دورة عمل متكاملة:** تنقل سلس للتذكرة بين الاستقبال والصيانة والحساب.")
+    st.markdown("- **تشخيص تقني عادل:** يعتمد على نوع العطل الفعلي وعمر الجهاز ومواصفاته.")
+    st.markdown("- **إدارة وتقارير:** حفظ في قاعدة بيانات SQLite، رصد تكرار الأعطال، وتصدير `.txt` و`.csv`.")
