@@ -8,7 +8,7 @@ import pandas as pd
 MANAGER_PIN = "MGR-2026"
 
 # 1. إعداد قاعدة البيانات المحلية (SQLite)
-conn = sqlite3.connect('enterprise_helpdesk_dept_field_v1.db', check_same_thread=False)
+conn = sqlite3.connect('enterprise_helpdesk_dept_field_v2.db', check_same_thread=False)
 cursor = conn.cursor()
 
 cursor.execute('''
@@ -299,4 +299,41 @@ if selected_dept == "قسم الاستقبال":
 # ==========================================
 elif selected_dept == "قسم الصيانة":
     st.subheader("🔧 قسم الصيانة — الفحص والتشخيص الفني")
-    st.caption("
+    st.caption("فحص الجهاز وتحديد الأعطال مع الاحتفاظ بنفس رقم التذكرة ونقلها للحساب.")
+
+    if df_all.empty:
+        st.info("📭 لا توجد تذاكر متاحة حالياً.")
+        c_b1, c_b2 = st.columns(2)
+        if c_b1.button("✨ تعبئة بيانات تجريبية"):
+            load_demo_data()
+            st.rerun()
+        if c_b2.button("🛎️ الذهاب لقسم الاستقبال"):
+            st.session_state.active_dept = "قسم الاستقبال"
+            st.rerun()
+    else:
+        ticket_ids = df_all["ticket_id"].tolist()
+        default_idx = 0
+        if st.session_state.current_ticket_id in ticket_ids:
+            default_idx = ticket_ids.index(st.session_state.current_ticket_id)
+
+        def fmt_maint(tid):
+            r = df_all[df_all["ticket_id"] == tid].iloc[0]
+            return f"{r['ticket_id']} | {r['customer_display']} ({r['stage']})"
+
+        chosen_id = st.selectbox("اختر التذكرة للفحص:", ticket_ids, index=default_idx, format_func=fmt_maint)
+        st.session_state.current_ticket_id = chosen_id
+        row = df_all[df_all["ticket_id"] == chosen_id].iloc[0]
+
+        with st.container(border=True):
+            st.write(f"**رقم التذكرة الثابت:** `{row['ticket_id']}` | **المرحلة الحالية:** `{row['stage']}`")
+            st.write(f"**العميل:** {row['customer_name']} | **القسم:** {row['customer_dept']} | **الجوال:** {row['customer_phone']}")
+            st.write(f"**الجهاز:** {row['device_type']} — {row['brand']} (`{row['device_sn']}`)")
+            st.info(f"**ملاحظات سابقة:** {row['tech_notes']}")
+
+        st.markdown("#### 1️⃣ مواصفات الجهاز أثناء الفحص")
+        device_age = st.slider("عمر الجهاز (بالسنوات)", 0, 15, 3)
+        c_r, c_s = st.columns(2)
+        with c_r:
+            ram = st.selectbox("الذاكرة (RAM)", ["4 GB", "8 GB", "16 GB", "32 GB", "64 GB"], index=1)
+        with c_s:
+            storage = st.selectbox("التخزين", ["
