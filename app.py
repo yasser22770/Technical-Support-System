@@ -799,4 +799,4 @@ elif dept_idx == 1:
 
         chosen_id = st.selectbox(t["pick_ticket_maint"], ticket_ids, index=default_idx, format_func=fmt_maint)
         st.session_state.current_ticket_id = chosen_id
-        row = maint_df[maint_df["ticket_id"] ==
+        row = maint_df(maint_df["ticket_id"] ==
