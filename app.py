@@ -9,7 +9,7 @@ import streamlit.components.v1 as components
 
 MANAGER_PIN = "MGR-2026"
 
-conn = sqlite3.connect("enterprise_helpdesk_all_cards_v1.db", check_same_thread=False)
+conn = sqlite3.connect("enterprise_helpdesk_exports_v1.db", check_same_thread=False)
 cursor = conn.cursor()
 
 cursor.execute("""
@@ -90,66 +90,140 @@ def parse_history(raw_json):
 
 def build_reception_receipt(row_dict, stage_label):
     lines = [
-        "==================================================",
-        "        DEVICE INTAKE & TRACKING RECEIPT",
-        "        فاتورة / إيصال استلام ومتابعة الجهاز",
-        "==================================================",
-        f"Ticket / Tracking ID : {row_dict['ticket_id']}",
-        f"Intake Date          : {row_dict['ticket_date']}",
-        f"Current Stage        : {stage_label}",
-        f"Priority             : {row_dict['priority']}",
-        "--------------------------------------------------",
-        f"Customer Name        : {row_dict['customer_name']}",
-        f"Customer Phone       : {row_dict['customer_phone']}",
-        f"Reception Staff      : {row_dict['reception_staff']}",
-        "--------------------------------------------------",
-        f"Device Type          : {row_dict['device_type']}",
-        f"Brand                : {row_dict['brand']}",
-        f"Serial / IMEI        : {row_dict['device_sn']}",
-        f"Device Specs         : {row_dict['device_specs']}",
-        "--------------------------------------------------",
-        "Reported Device Issue (مشكلة الجهاز):",
+        "==========================================================",
+        "           فاتورة متابعة الجهاز / TRACKING RECEIPT",
+        "==========================================================",
+        f"رقم التذكرة / Ticket ID : {row_dict['ticket_id']}",
+        f"التاريخ / Date          : {row_dict['ticket_date']}",
+        f"حالة المتابعة / Stage   : {stage_label}",
+        f"الأولوية / Priority      : {row_dict['priority']}",
+        "----------------------------------------------------------",
+        f"العميل / Customer        : {row_dict['customer_name']}",
+        f"الجوال / Mobile          : {row_dict['customer_phone']}",
+        f"موظف الاستقبال / Staff : {row_dict['reception_staff']}",
+        "----------------------------------------------------------",
+        f"الجهاز / Device          : {row_dict['device_type']} - {row_dict['brand']}",
+        f"S/N / IMEI              : {row_dict['device_sn']}",
+        f"مواصفات الجهاز / Specs  : {row_dict['device_specs']}",
+        "----------------------------------------------------------",
+        "مشكلة الجهاز / Reported Issue:",
         f"  {row_dict['customer_issue']}",
-        "==================================================",
-        "Keep this Ticket ID to track your device status.",
+        "==========================================================",
+        "متابعة الجهاز برقم التذكرة / Track device with Ticket ID.",
     ]
     return "\n".join(lines)
 
 
 def build_billing_invoice(row_dict, stage_label, pay_label, method_label, final_amount):
     lines = [
-        "==================================================",
-        "       SERVICE COMPLETION & PAYMENT INVOICE",
-        "          فاتورة الصيانة والدفع النهائية",
-        "==================================================",
-        f"Invoice / Ticket ID  : {row_dict['ticket_id']}",
-        f"Issue Date           : {row_dict['ticket_date']}",
-        f"Current Stage        : {stage_label}",
-        "--------------------------------------------------",
-        f"Customer Name        : {row_dict['customer_name']}",
-        f"Customer Phone       : {row_dict['customer_phone']}",
-        f"Technician           : {row_dict['technician_name']}",
-        "--------------------------------------------------",
-        f"Device               : {row_dict['device_type']} - {row_dict['brand']}",
-        f"Serial / IMEI        : {row_dict['device_sn']}",
-        f"Device Specs         : {row_dict['device_specs']}",
-        "--------------------------------------------------",
-        "1) Reported Issue (مشكلة الجهاز):",
-        f"   {row_dict['customer_issue']}",
+        "==========================================================",
+        "         فاتورة الصيانة والدفع / SERVICE INVOICE",
+        "==========================================================",
+        f"رقم الفاتورة / Invoice  : {row_dict['ticket_id']}",
+        f"التاريخ / Date          : {row_dict['ticket_date']}",
+        f"حالة الدفع / Payment     : {pay_label}",
+        "----------------------------------------------------------",
+        f"العميل / Customer        : {row_dict['customer_name']}",
+        f"الجوال / Mobile          : {row_dict['customer_phone']}",
+        f"الفني / Technician      : {row_dict['technician_name']}",
+        "----------------------------------------------------------",
+        f"الجهاز / Device          : {row_dict['device_type']} - {row_dict['brand']}",
+        f"S/N / IMEI              : {row_dict['device_sn']}",
+        f"مواصفات الجهاز / Specs  : {row_dict['device_specs']}",
+        "----------------------------------------------------------",
+        "مشكلة الجهاز / Reported Issue:",
+        f"  {row_dict['customer_issue']}",
         "",
-        "2) Technician Work Done (ما عمله الفني):",
-        f"   {row_dict['repaired_text']}",
-        "",
-        f"Decision / Action    : {row_dict['decision']}",
-        f"Technician Notes     : {row_dict['tech_notes'] or '-'}",
-        "--------------------------------------------------",
-        f"Payment Status       : {pay_label}",
-        f"Payment Method       : {method_label}",
-        f"Total Amount         : {final_amount}",
-        "==================================================",
-        "Thank you for trusting our technical support center.",
+        "ما عمله الفني / Technician Work Done:",
+        f"  {row_dict['repaired_text']}",
+        "----------------------------------------------------------",
+        f"طريقة الدفع / Method    : {method_label}",
+        f"القسم / Stage           : {stage_label}",
+        f"الإجمالي / Total         : {final_amount}",
+        "==========================================================",
     ]
     return "\n".join(lines)
+
+
+def build_unified_csv_bytes(df_src, lang_code, mode="full"):
+    if df_src.empty:
+        return b""
+    clean_df = df_src.copy()
+    if mode == "billing":
+        if lang_code == "ar":
+            out = pd.DataFrame({
+                "رقم الفاتورة": clean_df["ticket_id"],
+                "التاريخ": clean_df["ticket_date"],
+                "العميل": clean_df["customer_name"],
+                "الجوال": clean_df["customer_phone"],
+                "الفني": clean_df["technician_name"],
+                "الجهاز": clean_df["device_type"].astype(str) + " - " + clean_df["brand"].astype(str),
+                "S/N / IMEI": clean_df["device_sn"],
+                "مواصفات الجهاز": clean_df["device_specs"],
+                "مشكلة الجهاز": clean_df["customer_issue"],
+                "ما عمله الفني": clean_df["repaired_text"],
+                "طريقة الدفع": clean_df["payment_method"],
+                "حالة الدفع": clean_df["pay_disp"],
+                "القسم": clean_df["stage_disp"],
+                "الإجمالي": clean_df["cost_est"],
+            })
+        else:
+            out = pd.DataFrame({
+                "Invoice ID": clean_df["ticket_id"],
+                "Date": clean_df["ticket_date"],
+                "Customer": clean_df["customer_name"],
+                "Mobile": clean_df["customer_phone"],
+                "Technician": clean_df["technician_name"],
+                "Device": clean_df["device_type"].astype(str) + " - " + clean_df["brand"].astype(str),
+                "S/N / IMEI": clean_df["device_sn"],
+                "Device Specs": clean_df["device_specs"],
+                "Reported Issue": clean_df["customer_issue"],
+                "Technician Work Done": clean_df["repaired_text"],
+                "Payment Method": clean_df["payment_method"],
+                "Payment Status": clean_df["pay_disp"],
+                "Stage": clean_df["stage_disp"],
+                "Total": clean_df["cost_est"],
+            })
+    else:
+        if lang_code == "ar":
+            out = pd.DataFrame({
+                "رقم التذكرة": clean_df["ticket_id"],
+                "التاريخ": clean_df["ticket_date"],
+                "العميل": clean_df["customer_name"],
+                "الجوال": clean_df["customer_phone"],
+                "موظف الاستقبال": clean_df["reception_staff"],
+                "الفني": clean_df["technician_name"],
+                "الجهاز": clean_df["device_type"].astype(str) + " - " + clean_df["brand"].astype(str),
+                "S/N / IMEI": clean_df["device_sn"],
+                "مواصفات الجهاز": clean_df["device_specs"],
+                "مشكلة الجهاز": clean_df["customer_issue"],
+                "ما عمله الفني": clean_df["repaired_text"],
+                "الأولوية": clean_df["priority"],
+                "القسم": clean_df["stage_disp"],
+                "حالة الدفع": clean_df["pay_disp"],
+                "طريقة الدفع": clean_df["payment_method"],
+                "الإجمالي": clean_df["cost_est"],
+            })
+        else:
+            out = pd.DataFrame({
+                "Ticket ID": clean_df["ticket_id"],
+                "Date": clean_df["ticket_date"],
+                "Customer": clean_df["customer_name"],
+                "Mobile": clean_df["customer_phone"],
+                "Receptionist": clean_df["reception_staff"],
+                "Technician": clean_df["technician_name"],
+                "Device": clean_df["device_type"].astype(str) + " - " + clean_df["brand"].astype(str),
+                "S/N / IMEI": clean_df["device_sn"],
+                "Device Specs": clean_df["device_specs"],
+                "Reported Issue": clean_df["customer_issue"],
+                "Technician Work Done": clean_df["repaired_text"],
+                "Priority": clean_df["priority"],
+                "Stage": clean_df["stage_disp"],
+                "Payment Status": clean_df["pay_disp"],
+                "Payment Method": clean_df["payment_method"],
+                "Total": clean_df["cost_est"],
+            })
+    return out.to_csv(index=False).encode("utf-8-sig")
 
 
 def render_unified_document_card(
@@ -484,10 +558,11 @@ TEXTS = {
         "mgr_notes_lbl": "الملاحظات والتقرير الفني",
         "mgr_save_edit_btn": "💾 حفظ جميع التعديلات على التذكرة",
         "mgr_saved_edit_msg": "✅ تم حفظ جميع تعديلات التذكرة `{tid}` وتحديث قسمها إلى `{stage}`.",
-        "mgr_preview_type": "نوع الفاتورة للمعاينة / الطباعة للإدارة:",
+        "mgr_preview_type": "نوع الفاتورة للمعاينة / الطباعة / التصدير للإدارة:",
         "mgr_preview_opts": ["فاتورة صيانة ودفع", "فاتورة متابعة (بدون حساب)"],
         "mgr_show_card_btn": "🧾 عرض الفاتورة بالشكل الجديد",
         "mgr_hide_card_btn": "✖️ إخفاء الفاتورة",
+        "mgr_dl_txt_btn": "📥 تحميل الفاتورة المحددة (.txt)",
         "search_lbl": "🔎 بحث برقم التذكرة أو اسم العميل أو موظف الاستقبال أو رقم الجوال أو S/N",
         "filt_dept": "فلترة بالقسم",
         "filt_pay": "فلترة بالدفع",
@@ -501,15 +576,14 @@ TEXTS = {
         "about_title": "📌 نبذة عن الموقع",
         "about_desc": (
             "نظام ويب متكامل لإدارة أعمال الدعم الفني وصيانة الجوالات والأجهزة اللوحية والحواسيب برقم تذكرة وفاتورة واحد ثابت: "
-            "جميع الفواتير والإيصالات في الاستقبال والحساب والإدارة تعرض بنفس الشكل الجديد الموحّد، "
-            "مع سجل تتبع للحركات ولوحة مدير محمية."
+            "جميع الفواتير والإيصالات في الاستقبال والحساب والإدارة وملفات التصدير (.txt و .csv) تعرض بنفس الشكل الجديد الموحّد."
         ),
         "mgr_creds_title": "#### 🔑 بيانات دخول قسم المدير (لمسؤولي التوظيف والمستعرضين)",
         "mgr_pin_line": "**رقم الدخول الخاص بالمدير:** `{pin}`",
         "mgr_pin_hint": "انتقل إلى تبويب «المدير» وأدخل الرقم أعلاه لتجربة الإدارة الكاملة لجميع الأقسام.",
         "feats_title": "#### ✨ أبرز مزايا النظام:",
         "feats": [
-            "- **توحيد كامل لشكل جميع الفواتير:** كل فاتورة أو إيصال في الاستقبال والحساب والإدارة يظهر بنفس الشكل الجديد.",
+            "- **توحيد كامل للبطاقات وملفات التصدير (.txt و .csv):** كل فاتورة أو إيصال أو ملف تصدير يظهر بنفس التنسيق الجديد.",
             "- **إظهار الفاتورة عند الطلب:** لا تظهر البطاقة إلا عند الضغط على زر العرض/الطباعة.",
             "- **سجل تتبع زمني (Audit Log):** يوثّق خطوات التذكرة عبر الأقسام بوضوح احترافي لمسؤولي التوظيف.",
         ],
@@ -654,10 +728,11 @@ TEXTS = {
         "mgr_notes_lbl": "Notes & Technical Report",
         "mgr_save_edit_btn": "💾 Save All Ticket Changes",
         "mgr_saved_edit_msg": "✅ Saved all updates for ticket `{tid}` and routed to `{stage}`.",
-        "mgr_preview_type": "Invoice Type for Management Preview / Print:",
+        "mgr_preview_type": "Invoice Type for Management Preview / Print / Export:",
         "mgr_preview_opts": ["Service & Payment Invoice", "Tracking Receipt (No Billing)"],
         "mgr_show_card_btn": "🧾 Show Invoice in New Layout",
         "mgr_hide_card_btn": "✖️ Hide Invoice",
+        "mgr_dl_txt_btn": "📥 Download Selected Invoice (.txt)",
         "search_lbl": "🔎 Search by Ticket ID, Customer, Receptionist, Mobile, or S/N",
         "filt_dept": "Filter by Stage",
         "filt_pay": "Filter by Payment",
@@ -671,15 +746,15 @@ TEXTS = {
         "about_title": "📌 About This App",
         "about_desc": (
             "A bilingual helpdesk & maintenance web app for smartphones, tablets, laptops, and desktops "
-            "with a single Ticket ID, the same new unified card layout across Reception, Billing, and Manager, "
-            "written technician work log, status history audit log, and PIN-protected Manager view."
+            "with a single Ticket ID, the same new unified card layout and .txt/.csv exports across "
+            "Reception, Billing, and Manager."
         ),
         "mgr_creds_title": "#### 🔑 Manager Access Credentials (For Recruiters & Reviewers)",
         "mgr_pin_line": "**Manager Access PIN:** `{pin}`",
         "mgr_pin_hint": "Switch to the «Manager» tab and enter the PIN above to test full management across all departments.",
         "feats_title": "#### ✨ Key Features:",
         "feats": [
-            "- **Unified New Invoice Layout:** Every invoice or receipt in Reception, Billing, and Manager uses the same new design.",
+            "- **Unified New Layout & Exports (.txt & .csv):** Every invoice, receipt, and exported file matches the new layout.",
             "- **On-Demand Invoice Print:** Shows the card when clicking Show/Print.",
             "- **Status Audit Log:** Tracks stage transitions across Reception, Maintenance, and Billing for technical reviewers.",
         ],
@@ -1303,10 +1378,7 @@ elif dept_idx == 2:
                 mime="text/plain",
             )
 
-        export_df = filtered_bill.drop(
-            columns=["stage_code", "pay_code", "stage_disp", "pay_disp", "status_history"], errors="ignore"
-        )
-        csv_bytes = export_df.to_csv(index=False).encode("utf-8-sig")
+        csv_bytes = build_unified_csv_bytes(filtered_bill, st.session_state.lang, mode="billing")
         st.download_button(
             label=t["dl_csv_bill"],
             data=csv_bytes,
@@ -1449,6 +1521,19 @@ elif dept_idx == 3:
                     st.rerun()
 
                 mgr_card_mode_lbl = st.selectbox(t["mgr_preview_type"], t["mgr_preview_opts"], key="mgr_card_mode")
+                is_bill_preview = (mgr_card_mode_lbl == t["mgr_preview_opts"][0])
+
+                preview_row = erow.to_dict()
+                preview_row["customer_name"] = ed_cust.strip()
+                preview_row["customer_phone"] = ed_phone.strip()
+                preview_row["reception_staff"] = ed_staff.strip()
+                preview_row["technician_name"] = ed_tech.strip()
+                preview_row["device_sn"] = ed_sn.strip()
+                preview_row["device_specs"] = ed_specs.strip()
+                preview_row["customer_issue"] = ed_issue.strip()
+                preview_row["repaired_text"] = ed_rep.strip()
+                preview_row["priority"] = ed_prio.strip()
+
                 mc1, mc2 = st.columns(2)
                 with mc1:
                     if st.button(t["mgr_show_card_btn"]):
@@ -1460,17 +1545,6 @@ elif dept_idx == 3:
                         st.rerun()
 
                 if st.session_state.show_mgr_card:
-                    preview_row = erow.to_dict()
-                    preview_row["customer_name"] = ed_cust.strip()
-                    preview_row["customer_phone"] = ed_phone.strip()
-                    preview_row["reception_staff"] = ed_staff.strip()
-                    preview_row["technician_name"] = ed_tech.strip()
-                    preview_row["device_sn"] = ed_sn.strip()
-                    preview_row["device_specs"] = ed_specs.strip()
-                    preview_row["customer_issue"] = ed_issue.strip()
-                    preview_row["repaired_text"] = ed_rep.strip()
-                    preview_row["priority"] = ed_prio.strip()
-                    is_bill_preview = (mgr_card_mode_lbl == t["mgr_preview_opts"][0])
                     render_unified_document_card(
                         preview_row,
                         ed_stage_lbl,
@@ -1481,6 +1555,24 @@ elif dept_idx == 3:
                         final_amount=ed_cost.strip(),
                         is_paid=(ed_pay_db == "Paid"),
                     )
+
+                mgr_txt_data = (
+                    build_billing_invoice(
+                        preview_row,
+                        ed_stage_lbl,
+                        ed_pay_lbl,
+                        erow.get("payment_method", "-"),
+                        ed_cost.strip(),
+                    )
+                    if is_bill_preview
+                    else build_reception_receipt(preview_row, ed_stage_lbl)
+                )
+                st.download_button(
+                    label=t["mgr_dl_txt_btn"],
+                    data=mgr_txt_data,
+                    file_name=f"Unified_{edit_tid}.txt",
+                    mime="text/plain",
+                )
 
             st.markdown("---")
             st.markdown(t["mgr_add_sec"])
@@ -1572,9 +1664,7 @@ elif dept_idx == 3:
                 st.warning(t["del_msg"].format(tid=del_id))
                 st.rerun()
 
-            csv_mgr = mgr_df.drop(
-                columns=["stage_code", "pay_code", "stage_disp", "pay_disp"], errors="ignore"
-            ).to_csv(index=False).encode("utf-8-sig")
+            csv_mgr = build_unified_csv_bytes(mgr_df, st.session_state.lang, mode="full")
             st.download_button(
                 label=t["dl_csv_mgr"],
                 data=csv_mgr,
