@@ -9,7 +9,7 @@ import streamlit.components.v1 as components
 
 MANAGER_PIN = "MGR-2026"
 
-conn = sqlite3.connect("enterprise_helpdesk_dept_audit_v1.db", check_same_thread=False)
+conn = sqlite3.connect("enterprise_helpdesk_reception_master_v1.db", check_same_thread=False)
 cursor = conn.cursor()
 
 cursor.execute("""
@@ -91,10 +91,9 @@ def parse_history(raw_json):
 def build_reception_receipt(row_dict, stage_label):
     lines = [
         "فاتورة متابعة الجهاز / Tracking Receipt",
-        f"رقم التذكرة: {row_dict['ticket_id']} | التاريخ: {row_dict['ticket_date']}",
-        f"حالة المتابعة: {stage_label} | الأولوية: {row_dict['priority']}",
+        f"رقم التذكرة: {row_dict['ticket_id']} | التاريخ: {row_dict['ticket_date']} | الحالة: {stage_label}",
         f"العميل: {row_dict['customer_name']} | الجوال: {row_dict['customer_phone']}",
-        f"موظف الاستقبال: {row_dict['reception_staff']}",
+        f"موظف الاستقبال: {row_dict['reception_staff']} | الأولوية: {row_dict['priority']}",
         f"الجهاز: {row_dict['device_type']} - {row_dict['brand']}",
         f"S/N / IMEI: {row_dict['device_sn']}",
         f"مواصفات الجهاز: {row_dict['device_specs']}",
@@ -119,23 +118,79 @@ def build_billing_invoice(row_dict, stage_label, pay_label, method_label, final_
     return "\n".join(lines)
 
 
-def build_dept_inventory_txt(dept_title, df_dept):
-    if df_dept.empty:
-        return f"جرد قسم {dept_title}\nلا توجد تذاكر مسجلة في هذا القسم حالياً."
-    blocks = [f"جرد قسم {dept_title} — العدد: {len(df_dept)}", ""]
-    for _, r in df_dept.iterrows():
-        item = [
-            f"رقم التذكرة: {r['ticket_id']} | التاريخ: {r['ticket_date']} | القسم: {r['stage_disp']}",
-            f"العميل: {r['customer_name']} | الجوال: {r['customer_phone']} | الأولوية: {r['priority']}",
-            f"الجهاز: {r['device_type']} - {r['brand']} | S/N: {r['device_sn']}",
-            f"المواصفات: {r['device_specs']}",
-            f"مشكلة الجهاز: {r['customer_issue']}",
-            f"ما عمله الفني: {r['repaired_text']}",
-            f"الدفع: {r['pay_disp']} | الطريقة: {r['payment_method']} | المبلغ: {r['cost_est']}",
+def build_reception_all_invoice_txt(df_rec):
+    if df_rec.empty:
+        return "فاتورة جرد أجهزة الاستقبال / Reception Inventory Invoice\nلا توجد أجهزة مسجلة في الاستقبال حالياً."
+    lines = [
+        "فاتورة جرد أجهزة الاستقبال / Reception Inventory Invoice",
+        f"إجمالي الأجهزة المسجلة في الاستقبال: {len(df_rec)} | التاريخ: {datetime.now().strftime('%Y-%m-%d')}",
+        "",
+    ]
+    for idx, (_, r) in enumerate(df_rec.iterrows(), start=1):
+        lines.extend([
+            f"{idx}) رقم التذكرة: {r['ticket_id']} | التاريخ: {r['ticket_date']} | الأولوية: {r['priority']}",
+            f"   العميل: {r['customer_name']} | الجوال: {r['customer_phone']} | الاستقبال: {r['reception_staff']}",
+            f"   الجهاز: {r['device_type']} - {r['brand']} | S/N / IMEI: {r['device_sn']}",
+            f"   مواصفات الجهاز: {r['device_specs']}",
+            f"   مشكلة الجهاز: {r['customer_issue']}",
             "",
-        ]
-        blocks.extend(item)
-    return "\n".join(blocks)
+        ])
+    return "\n".join(lines)
+
+
+def render_reception_all_invoice_card(df_rec, is_rtl):
+    direction = "rtl" if is_rtl else "ltr"
+    e = html.escape
+    today_str = datetime.now().strftime("%Y-%m-%d")
+
+    if df_rec.empty:
+        rows_html = (
+            f'<div style="padding:14px;text-align:center;color:#64748b;font-size:13px;">'
+            f'لا توجد أجهزة مسجلة في الاستقبال حالياً.'
+            f'</div>'
+        )
+    else:
+        item_blocks = []
+        for idx, (_, r) in enumerate(df_rec.iterrows(), start=1):
+            item_blocks.append(
+                f'<div style="border:1px solid #e2e8f0;background:#f8fafc;border-radius:10px;padding:10px 12px;margin-bottom:8px;">'
+                f'<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:6px;">'
+                f'<span style="font-weight:700;color:#0f294a;font-size:13px;">{idx}. تذكرة: {e(str(r["ticket_id"]))}</span>'
+                f'<span style="background:#e0f2fe;color:#0369a1;padding:2px 9px;border-radius:999px;font-size:11px;font-weight:700;">{e(str(r["priority"]))}</span>'
+                f'</div>'
+                f'<div style="font-size:12px;color:#0f294a;line-height:1.6;">'
+                f'<strong>العميل:</strong> {e(str(r["customer_name"]))} ({e(str(r["customer_phone"]))}) | '
+                f'<strong>الاستقبال:</strong> {e(str(r["reception_staff"]))}<br>'
+                f'<strong>الجهاز:</strong> {e(str(r["device_type"]))} - {e(str(r["brand"]))} | '
+                f'<strong>S/N:</strong> {e(str(r["device_sn"]))}<br>'
+                f'<strong>المواصفات:</strong> {e(str(r["device_specs"]))}<br>'
+                f'<strong>مشكلة الجهاز:</strong> {e(str(r["customer_issue"]))}'
+                f'</div>'
+                f'</div>'
+            )
+        rows_html = "".join(item_blocks)
+
+    card_html = (
+        f'<div dir="{direction}" style="font-family:Segoe UI,Tahoma,sans-serif;background:#ffffff;border:1px solid #cbd5e1;border-radius:14px;padding:18px;color:#0f294a;">'
+        f'<div style="display:flex;justify-content:space-between;align-items:center;border-bottom:2px solid #e2e8f0;padding-bottom:10px;margin-bottom:12px;gap:8px;flex-wrap:wrap;">'
+        f'<div>'
+        f'<div style="font-size:17px;font-weight:700;color:#0f294a;">فاتورة جرد أجهزة الاستقبال / Reception Inventory</div>'
+        f'<div style="font-size:12px;color:#64748b;margin-top:2px;">التاريخ: <strong>{e(today_str)}</strong></div>'
+        f'</div>'
+        f'<span style="background:#e0f2fe;color:#0369a1;padding:5px 12px;border-radius:999px;font-weight:700;font-size:12px;">إجمالي الأجهزة: {len(df_rec)}</span>'
+        f'</div>'
+        f'{rows_html}'
+        f'<div style="display:flex;justify-content:space-between;align-items:center;background:#0f294a;color:#ffffff;padding:11px 14px;border-radius:10px;margin-top:10px;font-size:12.5px;">'
+        f'<span>القسم: <strong>الاستقبال / Reception</strong></span>'
+        f'<span>عدد الأجهزة: <strong>{len(df_rec)}</strong></span>'
+        f'</div>'
+        f'<div style="margin-top:12px;text-align:center;">'
+        f'<button onclick="window.print()" style="background:#0e7490;color:#ffffff;border:none;padding:9px 20px;border-radius:8px;font-weight:700;cursor:pointer;font-size:13px;">طباعة / Print</button>'
+        f'</div>'
+        f'</div>'
+    )
+    dynamic_h = min(760, max(320, 220 + len(df_rec) * 125))
+    components.html(card_html, height=dynamic_h, scrolling=True)
 
 
 def build_unified_csv_bytes(df_src, lang_code, mode="full"):
@@ -398,7 +453,7 @@ def load_demo_data():
             "يصدر صوت طقطقة من الداخل ولا يقلع إلى النظام.",
             "لم يُسجل بعد",
             "تم فحص القرص الميكانيكي ويوصى باستبدال الجهاز.",
-            "عاجلة", "توصية باستبدال الجهاز", "Maintenance", "Unpaid", "لم يُحدد بعد",
+            "عاجلة", "توصية باستبدال الجهاز", "Reception", "Unpaid", "لم يُحدد بعد",
             "2026-11-20", "فهد المطيري", "3,200 SAR",
             append_history("[]", "الاستقبال", "تم تسجيل الجهاز وإصدار فاتورة متابعة.")
         ),
@@ -520,7 +575,7 @@ TEXTS = {
         "hide_print_btn": "✖️ إخفاء الفاتورة",
         "dl_invoice": "📥 تحميل ملف الفاتورة (.txt)",
         "dl_csv_bill": "📊 تصدير فواتير الحساب (.csv)",
-        "mgr_title": "🔐 قسم المدير — إدارة كاملة وجرد الأقسام",
+        "mgr_title": "🔐 قسم المدير — إدارة كاملة وفاتورة جرد الاستقبال",
         "mgr_warn": "هذا القسم مخصص للمدير ولا يُفتح إلا برقم الدخول الخاص. يمكن لمسؤول التوظيف الاطلاع على الرقم في تبويب «نبذة عن الموقع».",
         "pin_lbl": "أدخل رقم الدخول الخاص بالمدير:",
         "pin_ph": "مثال: MGR-2026",
@@ -528,7 +583,7 @@ TEXTS = {
         "pin_ok": "✅ تم التحقق من رقم الدخول بنجاح.",
         "pin_err": "❌ رقم الدخول غير صحيح. راجع «نبذة عن الموقع» لمعرفة رقم الدخول المخصص للتجربة.",
         "lock_btn": "🔒 قفل / خروج من قسم المدير",
-        "mgr_caption": "إشراف كامل، جرد تفصيلي لكل قسم من الأقسام، وإدارة مباشرة للتذاكر والتقارير.",
+        "mgr_caption": "إشراف كامل، فاتورة جرد واحدة لجميع أجهزة الاستقبال، وإدارة مباشرة للتذاكر والتقارير.",
         "m_total": "إجمالي التذاكر",
         "m_urgent": "تذاكر عاجلة",
         "m_work": "في الصيانة / الحساب",
@@ -537,11 +592,11 @@ TEXTS = {
         "rep_times": "مرات",
         "chart_stage": "#### 📈 توزيع التذاكر حسب القسم",
         "chart_dec": "#### 📈 توزيع التذاكر حسب القرار",
-        "mgr_inv_sec": "#### 📦 جرد كامل لكل قسم من الأقسام للإدارة",
-        "mgr_inv_pick": "اختر القسم لعرض جرده الكامل:",
-        "mgr_inv_empty": "لا توجد تذاكر حالياً في هذا القسم ضمن الجرد.",
-        "mgr_inv_dl_txt": "📄 تحميل جرد القسم (.txt)",
-        "mgr_inv_dl_csv": "📊 تصدير جرد القسم (.csv)",
+        "mgr_rec_inv_sec": "#### 🧾 فاتورة جرد كامل الأجهزة المسجلة في الاستقبال (فاتورة واحدة)",
+        "mgr_rec_inv_show": "🧾 عرض فاتورة جرد الاستقبال",
+        "mgr_rec_inv_hide": "✖️ إخفاء فاتورة الجرد",
+        "mgr_rec_inv_dl_txt": "📥 تحميل فاتورة جرد الاستقبال (.txt)",
+        "mgr_rec_inv_dl_csv": "📊 تصدير جرد الاستقبال (.csv)",
         "mgr_add_sec": "#### ➕ إضافة تذكرة جديدة وتوجيهها لأي قسم مباشرة",
         "mgr_target_stage": "القسم المبدئي للتذكرة",
         "mgr_decision_lbl": "القرار / التشخيص",
@@ -574,16 +629,16 @@ TEXTS = {
         "about_title": "📌 نبذة عن الموقع",
         "about_desc": (
             "نظام ويب متكامل لإدارة أعمال الدعم الفني وصيانة الجوالات والأجهزة اللوحية والحواسيب برقم تذكرة وفاتورة واحد ثابت: "
-            "جميع الفواتير والإيصالات في الاستقبال والحساب والإدارة وملفات التصدير (.txt و .csv) تعرض بنفس النسق المنظم، "
-            "مع جرد كامل لكل قسم للإدارة."
+            "جميع الفواتير وملفات (.txt) و(.csv) تعرض بنفس النسق المنظم، "
+            "مع فاتورة موحدة لجرد كامل الأجهزة المسجلة في الاستقبال للإدارة."
         ),
         "mgr_creds_title": "#### 🔑 بيانات دخول قسم المدير (لمسؤولي التوظيف والمستعرضين)",
         "mgr_pin_line": "**رقم الدخول الخاص بالمدير:** `{pin}`",
-        "mgr_pin_hint": "انتقل إلى تبويب «المدير» وأدخل الرقم أعلاه لتجربة الإدارة الكاملة وجرد الأقسام.",
+        "mgr_pin_hint": "انتقل إلى تبويب «المدير» وأدخل الرقم أعلاه لتجربة الإدارة الكاملة وفاتورة جرد الاستقبال.",
         "feats_title": "#### ✨ أبرز مزايا النظام:",
         "feats": [
-            "- **جرد كامل لكل قسم للإدارة:** استعراض وتصدير جرد الاستقبال والصيانة والحساب بشكل مستقل ومرتب.",
-            "- **نسق واضح وموحد للبطاقات وملفات التصدير:** إزالة الزخرفة المزعجة وجعل ملفات التصدير مطابقة للنسق المطلوب.",
+            "- **فاتورة واحدة لجرد كامل أجهزة الاستقبال:** تجمع كل الأجهزة المسجلة في الاستقبال في فاتورة واحدة للإدارة.",
+            "- **تطابق ملف (.txt) مع البطاقة الجديدة:** نفس البيانات والترتيب النظيف دون زخرفة قديمة.",
             "- **سجل تتبع زمني (Audit Log):** يوثّق خطوات التذكرة عبر الأقسام بوضوح احترافي لمسؤولي التوظيف.",
         ],
     },
@@ -696,7 +751,7 @@ TEXTS = {
         "hide_print_btn": "✖️ Hide Invoice",
         "dl_invoice": "📥 Download Invoice File (.txt)",
         "dl_csv_bill": "📊 Export Billing Invoices (.csv)",
-        "mgr_title": "🔐 Manager — Full Management & Department Inventory",
+        "mgr_title": "🔐 Manager — Full Management & Reception Inventory Invoice",
         "mgr_warn": "Restricted to Manager access. Recruiters can view the demo PIN under the «About» tab.",
         "pin_lbl": "Enter Manager Access PIN:",
         "pin_ph": "Example: MGR-2026",
@@ -704,7 +759,7 @@ TEXTS = {
         "pin_ok": "✅ PIN verified successfully.",
         "pin_err": "❌ Invalid PIN. Check «About» for the demo access PIN.",
         "lock_btn": "🔒 Lock / Exit Manager View",
-        "mgr_caption": "Full oversight, full inventory per department, and direct management across tickets and reports.",
+        "mgr_caption": "Full oversight, a single invoice for all Reception devices, and direct management across tickets and reports.",
         "m_total": "Total Tickets",
         "m_urgent": "Urgent Tickets",
         "m_work": "Maintenance / Billing",
@@ -713,11 +768,11 @@ TEXTS = {
         "rep_times": "times",
         "chart_stage": "#### 📈 Tickets by Stage",
         "chart_dec": "#### 📈 Tickets by Decision",
-        "mgr_inv_sec": "#### 📦 Full Inventory Per Department for Management",
-        "mgr_inv_pick": "Select department to view its full inventory:",
-        "mgr_inv_empty": "No tickets currently in this department inventory.",
-        "mgr_inv_dl_txt": "📄 Download Department Inventory (.txt)",
-        "mgr_inv_dl_csv": "📊 Export Department Inventory (.csv)",
+        "mgr_rec_inv_sec": "#### 🧾 Single Invoice for All Reception Devices",
+        "mgr_rec_inv_show": "🧾 Show Reception Inventory Invoice",
+        "mgr_rec_inv_hide": "✖️ Hide Inventory Invoice",
+        "mgr_rec_inv_dl_txt": "📥 Download Reception Inventory Invoice (.txt)",
+        "mgr_rec_inv_dl_csv": "📊 Export Reception Inventory (.csv)",
         "mgr_add_sec": "#### ➕ Create New Ticket & Route to Any Department",
         "mgr_target_stage": "Initial Department",
         "mgr_decision_lbl": "Decision / Diagnosis",
@@ -750,15 +805,16 @@ TEXTS = {
         "about_title": "📌 About This App",
         "about_desc": (
             "A bilingual helpdesk & maintenance web app for smartphones, tablets, laptops, and desktops "
-            "with a single Ticket ID, clean unified card and .txt/.csv exports, and full department inventory for management."
+            "with a single Ticket ID, unified card and .txt/.csv exports, "
+            "and a single invoice for all Reception devices for management."
         ),
         "mgr_creds_title": "#### 🔑 Manager Access Credentials (For Recruiters & Reviewers)",
         "mgr_pin_line": "**Manager Access PIN:** `{pin}`",
-        "mgr_pin_hint": "Switch to the «Manager» tab and enter the PIN above to test full management and department inventory.",
+        "mgr_pin_hint": "Switch to the «Manager» tab and enter the PIN above to test full management and the Reception inventory invoice.",
         "feats_title": "#### ✨ Key Features:",
         "feats": [
-            "- **Full Per-Department Inventory:** View and export full inventory for Reception, Maintenance, and Billing.",
-            "- **Clean Unified Layout & Exports:** Clean text and CSV formatting without clutter.",
+            "- **Single Reception Inventory Invoice:** Combines all Reception devices into one invoice for management.",
+            "- **Aligned (.txt) Export:** Matches the new card layout cleanly without old decoration.",
             "- **Status Audit Log:** Tracks stage transitions across Reception, Maintenance, and Billing for technical reviewers.",
         ],
     },
@@ -787,6 +843,9 @@ if "show_tracking_card" not in st.session_state:
 
 if "show_mgr_card" not in st.session_state:
     st.session_state.show_mgr_card = False
+
+if "show_mgr_rec_invoice" not in st.session_state:
+    st.session_state.show_mgr_rec_invoice = False
 
 st.set_page_config(
     page_title=TEXTS[st.session_state.lang]["page_title"],
@@ -1442,45 +1501,39 @@ elif dept_idx == 3:
                 st.bar_chart(df_all["decision"].value_counts())
 
             st.markdown("---")
-            st.markdown(t["mgr_inv_sec"])
+            st.markdown(t["mgr_rec_inv_sec"])
+            df_rec_only = df_all[df_all["stage_code"] == "Reception"].copy()
             with st.container(border=True):
-                inv_dept_pick = st.selectbox(t["mgr_inv_pick"], t["stage_opts"], key="mgr_inv_dept")
-                inv_code_map = {
-                    "الاستقبال": "Reception", "الصيانة": "Maintenance", "الحساب": "Billing",
-                    "Reception": "Reception", "Maintenance": "Maintenance", "Billing": "Billing",
-                }
-                inv_code = inv_code_map[inv_dept_pick]
-                df_inv_dept = df_all[df_all["stage_code"] == inv_code].copy()
+                rc_b1, rc_b2 = st.columns(2)
+                with rc_b1:
+                    if st.button(t["mgr_rec_inv_show"], type="primary"):
+                        st.session_state.show_mgr_rec_invoice = True
+                        st.rerun()
+                with rc_b2:
+                    if st.session_state.show_mgr_rec_invoice and st.button(t["mgr_rec_inv_hide"]):
+                        st.session_state.show_mgr_rec_invoice = False
+                        st.rerun()
 
-                ic1, ic2, ic3 = st.columns(3)
-                ic1.metric(inv_dept_pick, len(df_inv_dept))
-                ic2.metric(t["m_paid_mgr"], len(df_inv_dept[df_inv_dept["pay_code"] == "Paid"]))
-                ic3.metric(t["m_urgent"], len(df_inv_dept[df_inv_dept["priority"].isin(["Urgent", "عاجلة"])]))
+                if st.session_state.show_mgr_rec_invoice:
+                    render_reception_all_invoice_card(df_rec_only, is_rtl=(st.session_state.lang == "ar"))
 
-                if df_inv_dept.empty:
-                    st.info(t["mgr_inv_empty"])
-                else:
-                    st.dataframe(
-                        df_inv_dept[["ticket_id", "customer_name", "customer_phone", "device_type", "brand", "device_specs", "customer_issue", "repaired_text", "pay_disp", "cost_est"]],
-                        use_container_width=True,
+                rec_all_txt = build_reception_all_invoice_txt(df_rec_only).encode("utf-8")
+                rec_all_csv = build_unified_csv_bytes(df_rec_only, st.session_state.lang, mode="full")
+                rc_d1, rc_d2 = st.columns(2)
+                with rc_d1:
+                    st.download_button(
+                        label=t["mgr_rec_inv_dl_txt"],
+                        data=rec_all_txt,
+                        file_name="Reception_All_Devices_Invoice.txt",
+                        mime="text/plain",
                     )
-                    inv_txt_bytes = build_dept_inventory_txt(inv_dept_pick, df_inv_dept).encode("utf-8")
-                    inv_csv_bytes = build_unified_csv_bytes(df_inv_dept, st.session_state.lang, mode="full")
-                    d_col1, d_col2 = st.columns(2)
-                    with d_col1:
-                        st.download_button(
-                            label=t["mgr_inv_dl_txt"],
-                            data=inv_txt_bytes,
-                            file_name=f"Inventory_{inv_code}.txt",
-                            mime="text/plain",
-                        )
-                    with d_col2:
-                        st.download_button(
-                            label=t["mgr_inv_dl_csv"],
-                            data=inv_csv_bytes,
-                            file_name=f"Inventory_{inv_code}.csv",
-                            mime="text/csv",
-                        )
+                with rc_d2:
+                    st.download_button(
+                        label=t["mgr_rec_inv_dl_csv"],
+                        data=rec_all_csv,
+                        file_name="Reception_All_Devices_Invoice.csv",
+                        mime="text/csv",
+                    )
 
             st.markdown("---")
             st.markdown(t["mgr_edit_sec"])
