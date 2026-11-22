@@ -6,7 +6,7 @@ import streamlit as st
 
 MANAGER_PIN = "MGR-2026"
 
-conn = sqlite3.connect("enterprise_helpdesk_devices_v1.db", check_same_thread=False)
+conn = sqlite3.connect("enterprise_helpdesk_strict_dept_v1.db", check_same_thread=False)
 cursor = conn.cursor()
 
 cursor.execute("""
@@ -170,14 +170,14 @@ TEXTS = {
         "save_rec_btn": "📥 حفظ التذكرة وتحويلها",
         "default_rec_note": "تم تسجيل الجهاز في الاستقبال بانتظار الفحص الفني.",
         "saved_rec_msg": "✅ تم حفظ التذكرة برقم `{tid}`.",
-        "reg_tickets": "📋 التذاكر المسجلة",
+        "reg_tickets": "📋 التذاكر المسجلة في الاستقبال",
         "no_tickets": "لا توجد تذاكر مسجلة بعد.",
         "load_demo": "✨ تعبئة بيانات تجريبية للاختبار",
         "maint_title": "🔧 قسم الصيانة — الفحص والتشخيص وتجهيز الفاتورة",
-        "maint_caption": "فحص الجهاز وتحديد الأعطال وتقدير التكلفة ثم نقل التذكرة بنفس الرقم إلى الحساب.",
-        "no_maint_tickets": "📭 لا توجد تذاكر متاحة حالياً.",
+        "maint_caption": "تظهر هنا التذاكر المحوّلة إلى قسم الصيانة فقط.",
+        "no_maint_tickets": "📭 لا توجد تذاكر محوّلة إلى قسم الصيانة حالياً.",
         "go_rec_btn": "🛎️ الذهاب لقسم الاستقبال",
-        "pick_ticket_maint": "اختر التذكرة للفحص:",
+        "pick_ticket_maint": "اختر التذكرة المخصصة للصيانة:",
         "fixed_tid": "**رقم التذكرة الثابت:** `{tid}` | **القسم الحالي:** `{stage}`",
         "cust_info_line": "**العميل:** {cust} | **موظف الاستقبال:** {staff} | **رقم الجوال:** {phone}",
         "dev_info_line": "**الجهاز:** {dtype} — {brand} (`{sn}`)",
@@ -212,27 +212,25 @@ TEXTS = {
         "save_diag_btn": "🛠️ حفظ التشخيص ونقل التذكرة",
         "saved_diag_msg": "✅ تم حفظ التشخيص للتذكرة `{tid}`.",
         "bill_title": "💳 قسم الحساب — الفواتير واعتماد الدفع",
-        "bill_caption": "متابعة فواتير التذاكر القادمة من الصيانة، واعتماد المبلغ وحالة الدفع.",
-        "no_bill_tickets": "📭 لا توجد فواتير أو تذاكر متاحة في الحساب حالياً.",
+        "bill_caption": "تظهر هنا الفواتير والتذاكر المحوّلة إلى قسم الحساب فقط.",
+        "no_bill_tickets": "📭 لا توجد فواتير محوّلة إلى قسم الحساب حالياً.",
         "m_in_bill": "فواتير في الحساب",
         "m_paid": "فواتير مدفوعة",
         "m_unpaid": "فواتير غير مدفوعة",
-        "filter_pay_lbl": "فلترة حسب حالة الدفع:",
-        "filter_stage_lbl": "فلترة حسب القسم:",
+        "filter_pay_lbl": "فلترة فواتير الحساب حسب حالة الدفع:",
         "pay_filter_opts": ["الكل", "غير مدفوع", "مدفوع"],
-        "stage_filter_opts": ["الحساب فقط", "الكل", "الاستقبال", "الصيانة", "الحساب"],
-        "bill_table_title": "#### 📄 سجل الفواتير",
-        "no_matching_bills": "لا توجد فواتير مطابقة للفلترة المحددة.",
-        "bill_mgmt": "#### 🧾 إصدار / تحديث فاتورة التذكرة",
-        "pick_ticket_bill": "اختر التذكرة / الفاتورة:",
+        "bill_table_title": "#### 📄 فواتير قسم الحساب",
+        "no_matching_bills": "لا توجد فواتير في قسم الحساب تطابق حالة الدفع المحددة.",
+        "bill_mgmt": "#### 🧾 اعتماد / تحديث فاتورة التذكرة",
+        "pick_ticket_bill": "اختر الفاتورة المخصصة للحساب:",
         "final_cost": "مبلغ الفاتورة (ر.س)",
         "pay_status": "حالة الدفع",
         "pay_opts": ["غير مدفوع", "مدفوع"],
-        "move_stage": "إبقاء التذكرة في الحساب أو إعادتها للصيانة:",
+        "move_stage": "إبقاء الفاتورة في الحساب أو إعادتها للصيانة:",
         "bill_stage_choices": ["الحساب", "الصيانة"],
         "save_bill_btn": "💾 حفظ الفاتورة وتحديث حالة الدفع",
         "dl_invoice": "📥 تحميل الفاتورة (.txt)",
-        "dl_csv_bill": "📊 تصدير سجل الفواتير (.csv)",
+        "dl_csv_bill": "📊 تصدير فواتير الحساب (.csv)",
         "mgr_title": "🔐 قسم المدير — دخول محمي برقم خاص",
         "mgr_warn": "هذا القسم مخصص للمدير ولا يُفتح إلا برقم الدخول الخاص. يمكن لمسؤول التوظيف الاطلاع على الرقم في تبويب «نبذة عن الموقع».",
         "pin_lbl": "أدخل رقم الدخول الخاص بالمدير:",
@@ -263,17 +261,17 @@ TEXTS = {
         "about_title": "📌 نبذة عن الموقع",
         "about_desc": (
             "نظام ويب متكامل لإدارة أعمال الدعم الفني وصيانة الجوالات والأجهزة اللوحية والحواسيب برقم تذكرة وفاتورة واحد ثابت: "
-            "الاستقبال <- الصيانة <- الحساب، مع إشراف إداري مستقل في قسم المدير "
-            "ومنطق تشخيص واقعي وعادل يحدد التوصية المناسبة دون تضخيم الأعطال البسيطة."
+            "الاستقبال <- الصيانة <- الحساب، مع تخصيص التذاكر لكل قسم بحيث لا يرى قسم الصيانة أو الحساب إلا التذاكر المحوّلة إليه، "
+            "وإشراف إداري مستقل في قسم المدير."
         ),
         "mgr_creds_title": "#### 🔑 بيانات دخول قسم المدير (لمسؤولي التوظيف والمستعرضين)",
         "mgr_pin_line": "**رقم الدخول الخاص بالمدير:** `{pin}`",
         "mgr_pin_hint": "انتقل إلى تبويب «المدير» وأدخل الرقم أعلاه لتجربة لوحة الإدارة والإحصاءات.",
         "feats_title": "#### ✨ أبرز مزايا النظام:",
         "feats": [
-            "- **تصنيف ذكي للأجهزة:** ربط كل نوع جهاز (جوال، آيباد، لابتوب، كمبيوتر مكتبي) بشركاته المصنعة الصحيحة.",
+            "- **عزل التذاكر حسب القسم:** قسم الصيانة يعرض تذاكر الصيانة فقط، وقسم الحساب يعرض فواتير الحساب فقط.",
             "- **مسار موحد:** تبدأ الفاتورة من الاستقبال وتنتقل للصيانة ثم الحساب برقم واحد ثابت.",
-            "- **فصل الصلاحيات والتقارير:** قسم الحساب للفواتير والدفع، وقسم المدير للإشراف والإحصاءات وحذف السجلات.",
+            "- **تصنيف ذكي وتقارير:** ربط أنواع الأجهزة بشركاتها الصحيحة، وحفظ SQLite وتصدير .txt و.csv.",
         ],
     },
     "en": {
@@ -316,10 +314,10 @@ TEXTS = {
         "no_tickets": "No tickets registered yet.",
         "load_demo": "✨ Load Demo Data",
         "maint_title": "🔧 Maintenance — Inspection, Diagnostics & Cost Estimate",
-        "maint_caption": "Inspect device/issues, estimate cost, and forward with the same ID to Billing.",
-        "no_maint_tickets": "📭 No tickets available right now.",
+        "maint_caption": "Only tickets assigned to Maintenance are shown here.",
+        "no_maint_tickets": "📭 No tickets assigned to Maintenance right now.",
         "go_rec_btn": "🛎️ Go to Reception",
-        "pick_ticket_maint": "Select ticket to inspect:",
+        "pick_ticket_maint": "Select Maintenance ticket to inspect:",
         "fixed_tid": "**Ticket ID:** `{tid}` | **Current Stage:** `{stage}`",
         "cust_info_line": "**Customer:** {cust} | **Receptionist:** {staff} | **Mobile:** {phone}",
         "dev_info_line": "**Device:** {dtype} — {brand} (`{sn}`)",
@@ -354,19 +352,17 @@ TEXTS = {
         "save_diag_btn": "🛠️ Save Diagnostics & Forward",
         "saved_diag_msg": "✅ Diagnostics saved for ticket `{tid}`.",
         "bill_title": "💳 Billing — Invoices & Payment Status",
-        "bill_caption": "Manage invoices coming from Maintenance, final amounts, and payment status.",
-        "no_bill_tickets": "📭 No billing records available yet.",
+        "bill_caption": "Only invoices transferred to Billing are shown here.",
+        "no_bill_tickets": "📭 No invoices assigned to Billing right now.",
         "m_in_bill": "Billing Invoices",
         "m_paid": "Paid Invoices",
         "m_unpaid": "Unpaid Invoices",
-        "filter_pay_lbl": "Filter by Payment Status:",
-        "filter_stage_lbl": "Filter by Stage:",
+        "filter_pay_lbl": "Filter Billing Invoices by Payment:",
         "pay_filter_opts": ["All", "Unpaid", "Paid"],
-        "stage_filter_opts": ["Billing Only", "All", "Reception", "Maintenance", "Billing"],
-        "bill_table_title": "#### 📄 Invoices Table",
-        "no_matching_bills": "No invoices match the selected filters.",
+        "bill_table_title": "#### 📄 Billing Invoices",
+        "no_matching_bills": "No Billing invoices match the selected payment status.",
         "bill_mgmt": "#### 🧾 Ticket Invoice & Payment",
-        "pick_ticket_bill": "Select ticket / invoice:",
+        "pick_ticket_bill": "Select Billing invoice:",
         "final_cost": "Invoice Amount (SAR)",
         "pay_status": "Payment Status",
         "pay_opts": ["Unpaid", "Paid"],
@@ -374,7 +370,7 @@ TEXTS = {
         "bill_stage_choices": ["Billing", "Maintenance"],
         "save_bill_btn": "💾 Save Invoice & Payment",
         "dl_invoice": "📥 Download Invoice (.txt)",
-        "dl_csv_bill": "📊 Export Invoices (.csv)",
+        "dl_csv_bill": "📊 Export Billing Invoices (.csv)",
         "mgr_title": "🔐 Manager — PIN Protected Access",
         "mgr_warn": "Restricted to Manager access. Recruiters can view the demo PIN under the «About» tab.",
         "pin_lbl": "Enter Manager Access PIN:",
@@ -405,17 +401,17 @@ TEXTS = {
         "about_title": "📌 About This App",
         "about_desc": (
             "A bilingual helpdesk & maintenance web app for smartphones, tablets, laptops, and desktops "
-            "tracking a single ticket & invoice ID across Reception -> Maintenance -> Billing, with a separate "
-            "PIN-protected Manager view and fair diagnostics."
+            "tracking a single ticket & invoice ID across Reception -> Maintenance -> Billing, strictly scoping "
+            "each department's queue to its assigned tickets, with a PIN-protected Manager view."
         ),
         "mgr_creds_title": "#### 🔑 Manager Access Credentials (For Recruiters & Reviewers)",
         "mgr_pin_line": "**Manager Access PIN:** `{pin}`",
         "mgr_pin_hint": "Switch to the «Manager» tab and enter the PIN above to test the admin dashboard.",
         "feats_title": "#### ✨ Key Features:",
         "feats": [
-            "- **Category-Matched Brands:** Smartphones, iPads/Tablets, Laptops, and Desktops each show only relevant brands.",
+            "- **Department-Scoped Queues:** Maintenance only sees Maintenance tickets; Billing only sees Billing invoices.",
             "- **Unified Flow:** Starts at Reception and moves to Maintenance then Billing with one fixed ID.",
-            "- **Clear Separation & Exports:** Billing handles invoices and payments while Manager handles oversight and exports.",
+            "- **Matched Brands & Exports:** Category-matched device brands, SQLite storage, and .txt / .csv exports.",
         ],
     },
 }
@@ -674,34 +670,36 @@ if dept_idx == 0:
             )
 
 # ==========================================
-# 1. الصيانة / Maintenance
+# 1. الصيانة / Maintenance (تظهر التذاكر المحوّلة للصيانة فقط)
 # ==========================================
 elif dept_idx == 1:
     st.subheader(t["maint_title"])
     st.caption(t["maint_caption"])
 
-    if df_all.empty:
+    maint_df = df_all[df_all["stage_code"] == "Maintenance"].copy() if not df_all.empty else pd.DataFrame()
+
+    if maint_df.empty:
         st.info(t["no_maint_tickets"])
         c_b1, c_b2 = st.columns(2)
-        if c_b1.button(t["load_demo"]):
+        if df_all.empty and c_b1.button(t["load_demo"]):
             load_demo_data()
             st.rerun()
         if c_b2.button(t["go_rec_btn"]):
             st.session_state.active_dept_idx = 0
             st.rerun()
     else:
-        ticket_ids = df_all["ticket_id"].tolist()
+        ticket_ids = maint_df["ticket_id"].tolist()
         default_idx = 0
         if st.session_state.current_ticket_id in ticket_ids:
             default_idx = ticket_ids.index(st.session_state.current_ticket_id)
 
         def fmt_maint(tid):
-            r = df_all[df_all["ticket_id"] == tid].iloc[0]
-            return f"{r['ticket_id']} | {r['customer_name']} — {r['device_type']} ({r['stage_disp']})"
+            r = maint_df[maint_df["ticket_id"] == tid].iloc[0]
+            return f"{r['ticket_id']} | {r['customer_name']} — {r['device_type']}"
 
         chosen_id = st.selectbox(t["pick_ticket_maint"], ticket_ids, index=default_idx, format_func=fmt_maint)
         st.session_state.current_ticket_id = chosen_id
-        row = df_all[df_all["ticket_id"] == chosen_id].iloc[0]
+        row = maint_df[maint_df["ticket_id"] == chosen_id].iloc[0]
 
         with st.container(border=True):
             st.write(t["fixed_tid"].format(tid=row["ticket_id"], stage=row["stage_disp"]))
@@ -862,42 +860,28 @@ elif dept_idx == 1:
                 st.rerun()
 
 # ==========================================
-# 2. الحساب / Billing
+# 2. الحساب / Billing (تظهر الفواتير المحوّلة للحساب فقط)
 # ==========================================
 elif dept_idx == 2:
     st.subheader(t["bill_title"])
     st.caption(t["bill_caption"])
 
-    if df_all.empty:
+    billing_pool = df_all[df_all["stage_code"] == "Billing"].copy() if not df_all.empty else pd.DataFrame()
+
+    if billing_pool.empty:
         st.info(t["no_bill_tickets"])
-        if st.button(t["load_demo"], type="primary"):
+        if df_all.empty and st.button(t["load_demo"], type="primary"):
             load_demo_data()
             st.rerun()
     else:
-        billing_pool = df_all[df_all["stage_code"] == "Billing"]
-
         m1, m2, m3 = st.columns(3)
         m1.metric(t["m_in_bill"], len(billing_pool))
         m2.metric(t["m_paid"], len(billing_pool[billing_pool["pay_code"] == "Paid"]))
         m3.metric(t["m_unpaid"], len(billing_pool[billing_pool["pay_code"] == "Unpaid"]))
 
-        f_col1, f_col2 = st.columns(2)
-        with f_col1:
-            pay_filter_sel = st.selectbox(t["filter_pay_lbl"], t["pay_filter_opts"])
-        with f_col2:
-            stage_filter_sel = st.selectbox(t["filter_stage_lbl"], t["stage_filter_opts"])
+        pay_filter_sel = st.selectbox(t["filter_pay_lbl"], t["pay_filter_opts"])
 
-        if stage_filter_sel == t["stage_filter_opts"][0]:
-            filtered_bill = df_all[df_all["stage_code"] == "Billing"].copy()
-        elif stage_filter_sel == t["stage_filter_opts"][1]:
-            filtered_bill = df_all.copy()
-        elif stage_filter_sel == t["stage_filter_opts"][2]:
-            filtered_bill = df_all[df_all["stage_code"] == "Reception"].copy()
-        elif stage_filter_sel == t["stage_filter_opts"][3]:
-            filtered_bill = df_all[df_all["stage_code"] == "Maintenance"].copy()
-        else:
-            filtered_bill = df_all[df_all["stage_code"] == "Billing"].copy()
-
+        filtered_bill = billing_pool.copy()
         if pay_filter_sel == t["pay_filter_opts"][1]:
             filtered_bill = filtered_bill[filtered_bill["pay_code"] == "Unpaid"]
         elif pay_filter_sel == t["pay_filter_opts"][2]:
@@ -916,10 +900,9 @@ elif dept_idx == 2:
                     "decision": "التشخيص",
                     "cost_est": "المبلغ",
                     "pay_disp": "حالة الدفع",
-                    "stage_disp": "القسم",
                 })
                 st.dataframe(
-                    disp_bill[["رقم التذكرة", "اسم العميل", "الجهاز", "الشركة", "التشخيص", "المبلغ", "حالة الدفع", "القسم"]],
+                    disp_bill[["رقم التذكرة", "اسم العميل", "الجهاز", "الشركة", "التشخيص", "المبلغ", "حالة الدفع"]],
                     use_container_width=True,
                 )
             else:
@@ -931,31 +914,26 @@ elif dept_idx == 2:
                     "decision": "Decision",
                     "cost_est": "Amount",
                     "pay_disp": "Payment",
-                    "stage_disp": "Stage",
                 })
                 st.dataframe(
-                    disp_bill[["Ticket ID", "Customer", "Device", "Brand", "Decision", "Amount", "Payment", "Stage"]],
+                    disp_bill[["Ticket ID", "Customer", "Device", "Brand", "Decision", "Amount", "Payment"]],
                     use_container_width=True,
                 )
 
-        bill_ids = df_all["ticket_id"].tolist()
+        bill_ids = billing_pool["ticket_id"].tolist()
         bill_default = 0
         if st.session_state.current_ticket_id in bill_ids:
             bill_default = bill_ids.index(st.session_state.current_ticket_id)
-        elif not billing_pool.empty:
-            first_bill_id = billing_pool.iloc[0]["ticket_id"]
-            if first_bill_id in bill_ids:
-                bill_default = bill_ids.index(first_bill_id)
 
         st.markdown(t["bill_mgmt"])
 
         def fmt_bill(tid):
-            r = df_all[df_all["ticket_id"] == tid].iloc[0]
+            r = billing_pool[billing_pool["ticket_id"] == tid].iloc[0]
             return f"{r['ticket_id']} | {r['customer_name']} ({r['pay_disp']})"
 
         bill_id = st.selectbox(t["pick_ticket_bill"], bill_ids, index=bill_default, format_func=fmt_bill)
         st.session_state.current_ticket_id = bill_id
-        brow = df_all[df_all["ticket_id"] == bill_id].iloc[0]
+        brow = billing_pool[billing_pool["ticket_id"] == bill_id].iloc[0]
 
         with st.container(border=True):
             st.write(t["fixed_tid"].format(tid=brow["ticket_id"], stage=brow["stage_disp"]))
@@ -977,8 +955,7 @@ elif dept_idx == 2:
             new_pay_lbl = st.selectbox(t["pay_status"], t["pay_opts"], index=pay_default_idx)
             new_pay_db = "Paid" if new_pay_lbl == t["pay_opts"][1] else "Unpaid"
 
-        stage_default_idx = 0 if brow["stage_code"] == "Billing" else 1
-        move_stage_lbl = st.selectbox(t["move_stage"], t["bill_stage_choices"], index=stage_default_idx)
+        move_stage_lbl = st.selectbox(t["move_stage"], t["bill_stage_choices"], index=0)
         stage_to_db = "Billing" if move_stage_lbl == t["bill_stage_choices"][0] else "Maintenance"
 
         if st.button(t["save_bill_btn"], type="primary"):
@@ -1115,7 +1092,7 @@ elif dept_idx == 3:
             ).to_csv(index=False).encode("utf-8-sig")
             st.download_button(
                 label=t["dl_csv_mgr"],
-                data=csv_bytes if "csv_bytes" in locals() and False else csv_mgr,
+                data=csv_mgr,
                 file_name="manager_tickets_report.csv",
                 mime="text/csv",
             )
