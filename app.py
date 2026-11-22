@@ -1,3 +1,4 @@
+import html
 import json
 import random
 import sqlite3
@@ -7,7 +8,7 @@ import streamlit as st
 
 MANAGER_PIN = "MGR-2026"
 
-conn = sqlite3.connect("enterprise_helpdesk_pro_v1.db", check_same_thread=False)
+conn = sqlite3.connect("enterprise_helpdesk_inv_fmt_v1.db", check_same_thread=False)
 cursor = conn.cursor()
 
 cursor.execute("""
@@ -88,27 +89,27 @@ def parse_history(raw_json):
 
 def build_reception_receipt(row_dict, stage_label):
     lines = [
-        "==========================================",
-        "   DEVICE INTAKE & TRACKING RECEIPT",
-        "   فاتورة / إيصال استلام ومتابعة الجهاز",
-        "==========================================",
+        "==================================================",
+        "        DEVICE INTAKE & TRACKING RECEIPT",
+        "        فاتورة / إيصال استلام ومتابعة الجهاز",
+        "==================================================",
         f"Ticket / Tracking ID : {row_dict['ticket_id']}",
         f"Intake Date          : {row_dict['ticket_date']}",
         f"Current Stage        : {stage_label}",
         f"Priority             : {row_dict['priority']}",
-        "------------------------------------------",
+        "--------------------------------------------------",
         f"Customer Name        : {row_dict['customer_name']}",
         f"Customer Phone       : {row_dict['customer_phone']}",
         f"Reception Staff      : {row_dict['reception_staff']}",
-        "------------------------------------------",
+        "--------------------------------------------------",
         f"Device Type          : {row_dict['device_type']}",
         f"Brand                : {row_dict['brand']}",
         f"Serial / IMEI        : {row_dict['device_sn']}",
         f"Device Specs         : {row_dict['device_specs']}",
-        "------------------------------------------",
+        "--------------------------------------------------",
         "Reported Device Issue (مشكلة الجهاز):",
-        f"{row_dict['customer_issue']}",
-        "==========================================",
+        f"  {row_dict['customer_issue']}",
+        "==================================================",
         "Keep this Ticket ID to track your device status.",
     ]
     return "\n".join(lines)
@@ -116,37 +117,91 @@ def build_reception_receipt(row_dict, stage_label):
 
 def build_billing_invoice(row_dict, stage_label, pay_label, method_label, final_amount):
     lines = [
-        "==========================================",
-        "   SERVICE COMPLETION & PAYMENT INVOICE",
-        "   فاتورة الصيانة والدفع النهائية",
-        "==========================================",
-        f"Ticket / Invoice ID  : {row_dict['ticket_id']}",
-        f"Date                 : {row_dict['ticket_date']}",
+        "==================================================",
+        "       SERVICE COMPLETION & PAYMENT INVOICE",
+        "          فاتورة الصيانة والدفع النهائية",
+        "==================================================",
+        f"Invoice / Ticket ID  : {row_dict['ticket_id']}",
+        f"Issue Date           : {row_dict['ticket_date']}",
         f"Current Stage        : {stage_label}",
-        "------------------------------------------",
+        "--------------------------------------------------",
         f"Customer Name        : {row_dict['customer_name']}",
         f"Customer Phone       : {row_dict['customer_phone']}",
         f"Technician           : {row_dict['technician_name']}",
-        "------------------------------------------",
+        "--------------------------------------------------",
         f"Device               : {row_dict['device_type']} - {row_dict['brand']}",
         f"Serial / IMEI        : {row_dict['device_sn']}",
         f"Device Specs         : {row_dict['device_specs']}",
-        "------------------------------------------",
+        "--------------------------------------------------",
         "1) Reported Issue (مشكلة الجهاز):",
-        f"{row_dict['customer_issue']}",
+        f"   {row_dict['customer_issue']}",
         "",
         "2) Technician Work Done (ما عمله الفني):",
-        f"{row_dict['repaired_text']}",
+        f"   {row_dict['repaired_text']}",
         "",
         f"Decision / Action    : {row_dict['decision']}",
         f"Technician Notes     : {row_dict['tech_notes'] or '-'}",
-        "------------------------------------------",
-        f"Invoice Amount       : {final_amount}",
+        "--------------------------------------------------",
         f"Payment Status       : {pay_label}",
         f"Payment Method       : {method_label}",
-        "==========================================",
+        f"Total Amount         : {final_amount}",
+        "==================================================",
+        "Thank you for trusting our technical support center.",
     ]
     return "\n".join(lines)
+
+
+def render_printable_invoice_html(row_dict, stage_label, pay_label, method_label, final_amount, is_paid):
+    badge_bg = "#dcfce7" if is_paid else "#fef3c7"
+    badge_fg = "#166534" if is_paid else "#92400e"
+    e = html.escape
+    return f"""
+    <div style="background:#ffffff;border:1px solid #cbd5e1;border-radius:14px;padding:22px;margin:14px 0;box-shadow:0 4px 16px rgba(15,41,74,0.08);color:#0f294a;">
+        <div style="display:flex;justify-content:space-between;align-items:center;border-bottom:2px solid #e2e8f0;padding-bottom:12px;margin-bottom:14px;gap:10px;flex-wrap:wrap;">
+            <div>
+                <div style="font-size:18px;font-weight:700;color:#0f294a;">🧾 فاتورة الصيانة والدفع / Service Invoice</div>
+                <div style="font-size:13px;color:#64748b;">رقم التذكرة / الفاتورة: <strong>{e(str(row_dict['ticket_id']))}</strong> | التاريخ: <strong>{e(str(row_dict['ticket_date']))}</strong></div>
+            </div>
+            <span style="background:{badge_bg};color:{badge_fg};padding:6px 14px;border-radius:999px;font-weight:700;font-size:13px;">
+                {e(str(pay_label))}
+            </span>
+        </div>
+
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:10px;background:#f8fafc;padding:12px;border-radius:10px;margin-bottom:14px;font-size:13.5px;">
+            <div><strong>العميل / Customer:</strong><br>{e(str(row_dict['customer_name']))}</div>
+            <div><strong>الجوال / Mobile:</strong><br>{e(str(row_dict['customer_phone']))}</div>
+            <div><strong>الفني / Technician:</strong><br>{e(str(row_dict['technician_name']))}</div>
+            <div><strong>الجهاز / Device:</strong><br>{e(str(row_dict['device_type']))} — {e(str(row_dict['brand']))}</div>
+            <div><strong>S/N / IMEI:</strong><br>{e(str(row_dict['device_sn']))}</div>
+            <div><strong>المواصفات / Specs:</strong><br>{e(str(row_dict['device_specs']))}</div>
+        </div>
+
+        <div style="margin-bottom:12px;">
+            <div style="font-weight:700;color:#92400e;margin-bottom:4px;">📌 مشكلة الجهاز / Reported Issue:</div>
+            <div style="background:#fffbeb;border-inline-start:4px solid #f59e0b;padding:10px 12px;border-radius:8px;font-size:13.5px;">
+                {e(str(row_dict['customer_issue']))}
+            </div>
+        </div>
+
+        <div style="margin-bottom:14px;">
+            <div style="font-weight:700;color:#065f46;margin-bottom:4px;">🛠️ ما عمله الفني / Technician Work Done:</div>
+            <div style="background:#ecfdf5;border-inline-start:4px solid #10b981;padding:10px 12px;border-radius:8px;font-size:13.5px;">
+                {e(str(row_dict['repaired_text']))}
+            </div>
+        </div>
+
+        <div style="display:flex;justify-content:space-between;align-items:center;background:#0f294a;color:#ffffff;padding:14px 16px;border-radius:10px;flex-wrap:wrap;gap:10px;">
+            <div style="font-size:13.5px;">
+                <div>طريقة الدفع / Method: <strong>{e(str(method_label))}</strong></div>
+                <div style="opacity:0.85;">القسم / Stage: <strong>{e(str(stage_label))}</strong></div>
+            </div>
+            <div style="text-align:end;">
+                <div style="font-size:12px;color:#bae6fd;">الإجمالي / Total</div>
+                <div style="font-size:20px;font-weight:700;color:#ffffff;">{e(str(final_amount))}</div>
+            </div>
+        </div>
+    </div>
+    """
 
 
 DEVICE_BRANDS = {
@@ -294,6 +349,7 @@ TEXTS = {
         "saved_rec_msg": "✅ تم حفظ التذكرة برقم `{tid}` وإصدار فاتورة المتابعة.",
         "dl_intake_receipt": "📄 تحميل فاتورة متابعة الجهاز للعميل (.txt)",
         "reg_tickets": "📋 التذاكر المسجلة وتتبع حالة الجهاز",
+        "track_search": "بحث سريع برقم التذكرة أو اسم العميل أو الجوال:",
         "track_pick": "اختر تذكرة لعرض فاتورة المتابعة وسجل الحركات:",
         "timeline_title": "🕒 سجل تتبع حالة الجهاز (Audit Log)",
         "no_tickets": "لا توجد تذاكر مسجلة بعد.",
@@ -329,7 +385,7 @@ TEXTS = {
         "save_diag_btn": "🛠️ حفظ عمل الفني ونقل التذكرة",
         "saved_diag_msg": "✅ تم حفظ عمل الفني للتذكرة `{tid}`.",
         "bill_title": "💳 قسم الحساب — تأكيد الدفع وإصدار الفاتورة النهائية",
-        "bill_caption": "يُعتمد الدفع وتُصدر فاتورة واضحة تشمل حالة الدفع ومشكلة الجهاز وما عمله الفني.",
+        "bill_caption": "يُعتمد الدفع وتُصدر فاتورة منظمة وجاهزة للعرض والطباعة تشمل الدفع ومشكلة الجهاز وما عمله الفني.",
         "no_bill_tickets": "📭 لا توجد فواتير محوّلة إلى قسم الحساب حالياً.",
         "m_in_bill": "فواتير في الحساب",
         "m_paid": "فواتير مدفوعة",
@@ -338,7 +394,7 @@ TEXTS = {
         "pay_filter_opts": ["الكل", "غير مدفوع", "مدفوع"],
         "bill_table_title": "#### 📄 فواتير قسم الحساب",
         "no_matching_bills": "لا توجد فواتير في قسم الحساب تطابق حالة الدفع المحددة.",
-        "bill_mgmt": "#### 🧾 اعتماد الدفع وإصدار الفاتورة",
+        "bill_mgmt": "#### 🧾 اعتماد الدفع ومعاينة الفاتورة النهائية",
         "pick_ticket_bill": "اختر الفاتورة المخصصة للحساب:",
         "final_cost": "مبلغ الفاتورة (ر.س)",
         "pay_status": "حالة الدفع",
@@ -346,9 +402,9 @@ TEXTS = {
         "pay_method_lbl": "طريقة الدفع",
         "move_stage": "إبقاء الفاتورة في الحساب أو إعادتها للصيانة:",
         "bill_stage_choices": ["الحساب", "الصيانة"],
-        "save_bill_btn": "💾 حفظ حالة الدفع وإصدار الفاتورة",
-        "paid_confirm_msg": "✅ تم حفظ الفاتورة وتحديث حالة الدفع: **{pay}** ({method}).",
-        "dl_invoice": "📥 تحميل فاتورة الدفع والعمل الفني (.txt)",
+        "save_bill_btn": "💾 حفظ حالة الدفع وتحديث الفاتورة",
+        "print_tip": "💡 للطباعة الورقية أو حفظ PDF مباشرة من المتصفح: اضغط **Ctrl + P** (أو **Cmd + P**) أو حمّل ملف الفاتورة المنظم أدناه.",
+        "dl_invoice": "📥 تحميل الفاتورة النهائية المنظمة (.txt)",
         "dl_csv_bill": "📊 تصدير فواتير الحساب (.csv)",
         "mgr_title": "🔐 قسم المدير — إدارة كاملة لجميع الأقسام",
         "mgr_warn": "هذا القسم مخصص للمدير ولا يُفتح إلا برقم الدخول الخاص. يمكن لمسؤول التوظيف الاطلاع على الرقم في تبويب «نبذة عن الموقع».",
@@ -394,7 +450,7 @@ TEXTS = {
         "about_title": "📌 نبذة عن الموقع",
         "about_desc": (
             "نظام ويب متكامل لإدارة أعمال الدعم الفني وصيانة الجوالات والأجهزة اللوحية والحواسيب برقم تذكرة وفاتورة واحد ثابت: "
-            "الاستقبال (فاتورة متابعة + مواصفات الجهاز) ← الصيانة (كتابة ما عمله الفني) ← الحساب (تأكيد الدفع + فاتورة نهائية)، "
+            "الاستقبال (فاتورة متابعة + مواصفات الجهاز) ← الصيانة (كتابة ما عمله الفني) ← الحساب (تأكيد الدفع + فاتورة نهائية منسقة للعرض والطباعة)، "
             "مع سجل تتبع للحركات ولوحة مدير محمية."
         ),
         "mgr_creds_title": "#### 🔑 بيانات دخول قسم المدير (لمسؤولي التوظيف والمستعرضين)",
@@ -402,8 +458,8 @@ TEXTS = {
         "mgr_pin_hint": "انتقل إلى تبويب «المدير» وأدخل الرقم أعلاه لتجربة الإدارة الكاملة لجميع الأقسام.",
         "feats_title": "#### ✨ أبرز مزايا النظام:",
         "feats": [
+            "- **فاتورة نهائية منسقة:** معاينة واضحة وجاهزة للعرض والطباعة تشمل حالة الدفع ومشكلة الجهاز وما عمله الفني.",
             "- **فاتورة متابعة من الاستقبال:** يصدر إيصال متابعة برقم التذكرة ليتمكن العميل من تتبع حالة جهازه.",
-            "- **فاتورة دفع شاملة في الحساب:** توضح حالة الدفع وطريقة الدفع ومشكلة الجهاز وما عمله الفني كتابياً.",
             "- **سجل تتبع زمني (Audit Log):** يوثّق خطوات التذكرة عبر الأقسام بوضوح احترافي لمسؤولي التوظيف.",
         ],
     },
@@ -456,6 +512,7 @@ TEXTS = {
         "saved_rec_msg": "✅ Ticket `{tid}` saved and tracking receipt generated.",
         "dl_intake_receipt": "📄 Download Device Tracking Receipt (.txt)",
         "reg_tickets": "📋 Registered Tickets & Device Tracking",
+        "track_search": "Quick search by Ticket ID, Customer, or Mobile:",
         "track_pick": "Select a ticket to view its tracking receipt and history:",
         "timeline_title": "🕒 Device Status Audit Log",
         "no_tickets": "No tickets registered yet.",
@@ -490,8 +547,8 @@ TEXTS = {
         "send_bill": "Send ticket with the same ID to Billing after saving",
         "save_diag_btn": "🛠️ Save Technician Work & Forward",
         "saved_diag_msg": "✅ Technician work saved for ticket `{tid}`.",
-        "bill_title": "💳 Billing — Payment Confirmation & Final Invoice",
-        "bill_caption": "Confirms payment and issues a complete invoice with payment status, reported issue, and technician work done.",
+        "bill_title": "💳 Billing — Payment Confirmation & Formatted Invoice",
+        "bill_caption": "Confirms payment and renders a clean display/print-ready invoice with payment status, reported issue, and technician work done.",
         "no_bill_tickets": "📭 No invoices transferred to Billing right now.",
         "m_in_bill": "Billing Invoices",
         "m_paid": "Paid Invoices",
@@ -500,7 +557,7 @@ TEXTS = {
         "pay_filter_opts": ["All", "Unpaid", "Paid"],
         "bill_table_title": "#### 📄 Billing Invoices",
         "no_matching_bills": "No Billing invoices match the selected payment status.",
-        "bill_mgmt": "#### 🧾 Payment Confirmation & Invoice Issuance",
+        "bill_mgmt": "#### 🧾 Payment Confirmation & Invoice Preview",
         "pick_ticket_bill": "Select Billing invoice:",
         "final_cost": "Invoice Amount (SAR)",
         "pay_status": "Payment Status",
@@ -508,9 +565,9 @@ TEXTS = {
         "pay_method_lbl": "Payment Method",
         "move_stage": "Keep in Billing or return to Maintenance:",
         "bill_stage_choices": ["Billing", "Maintenance"],
-        "save_bill_btn": "💾 Save Payment & Issue Invoice",
-        "paid_confirm_msg": "✅ Saved invoice and payment status: **{pay}** ({method}).",
-        "dl_invoice": "📥 Download Payment & Work Invoice (.txt)",
+        "save_bill_btn": "💾 Save Payment & Update Invoice",
+        "print_tip": "💡 To print or save as PDF directly from your browser: press **Ctrl + P** (or **Cmd + P**) or download the formatted invoice below.",
+        "dl_invoice": "📥 Download Formatted Final Invoice (.txt)",
         "dl_csv_bill": "📊 Export Billing Invoices (.csv)",
         "mgr_title": "🔐 Manager — Full Management Across All Departments",
         "mgr_warn": "Restricted to Manager access. Recruiters can view the demo PIN under the «About» tab.",
@@ -556,16 +613,16 @@ TEXTS = {
         "about_title": "📌 About This App",
         "about_desc": (
             "A bilingual helpdesk & maintenance web app for smartphones, tablets, laptops, and desktops "
-            "with a single Ticket ID, intake tracking receipt, written technician work log, payment confirmation invoice, "
-            "status history audit log, and PIN-protected Manager view."
+            "with a single Ticket ID, intake tracking receipt, written technician work log, formatted display/print-ready "
+            "final invoice, status history audit log, and PIN-protected Manager view."
         ),
         "mgr_creds_title": "#### 🔑 Manager Access Credentials (For Recruiters & Reviewers)",
         "mgr_pin_line": "**Manager Access PIN:** `{pin}`",
         "mgr_pin_hint": "Switch to the «Manager» tab and enter the PIN above to test full management across all departments.",
         "feats_title": "#### ✨ Key Features:",
         "feats": [
+            "- **Formatted Final Invoice:** Clean display and print-ready invoice showing payment status, reported issue, and technician work done.",
             "- **Intake Tracking Receipt:** Generates a tracking receipt with the Ticket ID so customers can follow up on their device.",
-            "- **Complete Billing Invoice:** Displays payment status, payment method, reported device issue, and technician work done.",
             "- **Status Audit Log:** Tracks stage transitions across Reception, Maintenance, and Billing for technical reviewers.",
         ],
     },
@@ -712,7 +769,7 @@ if st.session_state.current_ticket_id and not df_all.empty:
 st.markdown("---")
 
 # ==========================================
-# 0. الاستقبال / Reception (فاتورة متابعة + مواصفات الجهاز)
+# 0. الاستقبال / Reception
 # ==========================================
 if dept_idx == 0:
     st.subheader(t["rec_title"])
@@ -815,57 +872,68 @@ if dept_idx == 0:
             load_demo_data()
             st.rerun()
     else:
-        if st.session_state.lang == "ar":
-            disp_df = df_all.rename(columns={
-                "ticket_id": "رقم التذكرة",
-                "customer_name": "اسم العميل",
-                "device_type": "نوع الجهاز",
-                "device_specs": "مواصفات الجهاز",
-                "customer_issue": "مشكلة الجهاز",
-                "stage_disp": "القسم الحالي",
-                "pay_disp": "الدفع",
-            })
-            st.dataframe(
-                disp_df[["رقم التذكرة", "اسم العميل", "نوع الجهاز", "مواصفات الجهاز", "مشكلة الجهاز", "القسم الحالي", "الدفع"]],
-                use_container_width=True,
+        q_track = st.text_input(t["track_search"], key="track_q")
+        track_df = df_all.copy()
+        if q_track.strip():
+            m = (
+                track_df["ticket_id"].str.contains(q_track.strip(), case=False, na=False)
+                | track_df["customer_name"].str.contains(q_track.strip(), case=False, na=False)
+                | track_df["customer_phone"].str.contains(q_track.strip(), case=False, na=False)
             )
-        else:
-            disp_df = df_all.rename(columns={
-                "ticket_id": "Ticket ID",
-                "customer_name": "Customer",
-                "device_type": "Device",
-                "device_specs": "Device Specs",
-                "customer_issue": "Reported Issue",
-                "stage_disp": "Stage",
-                "pay_disp": "Payment",
-            })
-            st.dataframe(
-                disp_df[["Ticket ID", "Customer", "Device", "Device Specs", "Reported Issue", "Stage", "Payment"]],
-                use_container_width=True,
+            track_df = track_df[m]
+
+        if not track_df.empty:
+            if st.session_state.lang == "ar":
+                disp_df = track_df.rename(columns={
+                    "ticket_id": "رقم التذكرة",
+                    "customer_name": "اسم العميل",
+                    "device_type": "نوع الجهاز",
+                    "device_specs": "مواصفات الجهاز",
+                    "customer_issue": "مشكلة الجهاز",
+                    "stage_disp": "القسم الحالي",
+                    "pay_disp": "الدفع",
+                })
+                st.dataframe(
+                    disp_df[["رقم التذكرة", "اسم العميل", "نوع الجهاز", "مواصفات الجهاز", "مشكلة الجهاز", "القسم الحالي", "الدفع"]],
+                    use_container_width=True,
+                )
+            else:
+                disp_df = track_df.rename(columns={
+                    "ticket_id": "Ticket ID",
+                    "customer_name": "Customer",
+                    "device_type": "Device",
+                    "device_specs": "Device Specs",
+                    "customer_issue": "Reported Issue",
+                    "stage_disp": "Stage",
+                    "pay_disp": "Payment",
+                })
+                st.dataframe(
+                    disp_df[["Ticket ID", "Customer", "Device", "Device Specs", "Reported Issue", "Stage", "Payment"]],
+                    use_container_width=True,
+                )
+
+            rec_ids = track_df["ticket_id"].tolist()
+            rec_def = 0
+            if st.session_state.current_ticket_id in rec_ids:
+                rec_def = rec_ids.index(st.session_state.current_ticket_id)
+            picked_rec_id = st.selectbox(t["track_pick"], rec_ids, index=rec_def)
+            r_row = track_df[track_df["ticket_id"] == picked_rec_id].iloc[0].to_dict()
+            r_row["stage_disp"] = track_df[track_df["ticket_id"] == picked_rec_id].iloc[0]["stage_disp"]
+
+            intake_txt = build_reception_receipt(r_row, r_row["stage_disp"])
+            st.download_button(
+                label=t["dl_intake_receipt"],
+                data=intake_txt,
+                file_name=f"Tracking_Receipt_{picked_rec_id}.txt",
+                mime="text/plain",
             )
 
-        rec_ids = df_all["ticket_id"].tolist()
-        rec_def = 0
-        if st.session_state.current_ticket_id in rec_ids:
-            rec_def = rec_ids.index(st.session_state.current_ticket_id)
-        picked_rec_id = st.selectbox(t["track_pick"], rec_ids, index=rec_def)
-        r_row = df_all[df_all["ticket_id"] == picked_rec_id].iloc[0].to_dict()
-        r_row["stage_disp"] = df_all[df_all["ticket_id"] == picked_rec_id].iloc[0]["stage_disp"]
-
-        intake_txt = build_reception_receipt(r_row, r_row["stage_disp"])
-        st.download_button(
-            label=t["dl_intake_receipt"],
-            data=intake_txt,
-            file_name=f"Tracking_Receipt_{picked_rec_id}.txt",
-            mime="text/plain",
-        )
-
-        st.markdown(f"##### {t['timeline_title']}")
-        for h_item in parse_history(r_row.get("status_history", "[]")):
-            st.caption(f"• {h_item}")
+            st.markdown(f"##### {t['timeline_title']}")
+            for h_item in parse_history(r_row.get("status_history", "[]")):
+                st.caption(f"• {h_item}")
 
 # ==========================================
-# 1. الصيانة / Maintenance (كتابة ما عمله الفني)
+# 1. الصيانة / Maintenance
 # ==========================================
 elif dept_idx == 1:
     st.subheader(t["maint_title"])
@@ -963,7 +1031,7 @@ elif dept_idx == 1:
                 st.rerun()
 
 # ==========================================
-# 2. الحساب / Billing (الدفع + فاتورة شاملة)
+# 2. الحساب / Billing (فاتورة منسقة للعرض والطباعة)
 # ==========================================
 elif dept_idx == 2:
     st.subheader(t["bill_title"])
@@ -1038,21 +1106,6 @@ elif dept_idx == 2:
         st.session_state.current_ticket_id = bill_id
         brow = billing_pool[billing_pool["ticket_id"] == bill_id].iloc[0]
 
-        with st.container(border=True):
-            st.write(t["fixed_tid"].format(tid=brow["ticket_id"], stage=brow["stage_disp"]))
-            st.write(
-                t["cust_info_line"].format(
-                    cust=brow["customer_name"],
-                    staff=brow["reception_staff"],
-                    phone=brow["customer_phone"],
-                )
-            )
-            st.write(t["dev_info_line"].format(dtype=brow["device_type"], brand=brow["brand"], sn=brow["device_sn"]))
-            st.write(t["specs_info_line"].format(specs=brow["device_specs"]))
-            st.warning(t["cust_issue_box"].format(issue=brow["customer_issue"]))
-            st.success(t["repaired_box"].format(rep=brow["repaired_text"]))
-            st.write(f"**{brow['decision']}** | `{brow['cost_est']}` | `{brow['pay_disp']}` | `{brow['payment_method']}`")
-
         c_cost, c_pay, c_meth = st.columns(3)
         with c_cost:
             new_cost = st.text_input(t["final_cost"], value=brow["cost_est"])
@@ -1086,6 +1139,19 @@ elif dept_idx == 2:
                 st.session_state.active_dept_idx = 1
             st.rerun()
 
+        st.markdown(
+            render_printable_invoice_html(
+                brow.to_dict(),
+                move_stage_lbl,
+                new_pay_lbl,
+                new_method,
+                new_cost.strip(),
+                is_paid=(new_pay_db == "Paid"),
+            ),
+            unsafe_allow_html=True,
+        )
+        st.caption(t["print_tip"])
+
         invoice_txt = build_billing_invoice(
             brow.to_dict(),
             move_stage_lbl,
@@ -1112,7 +1178,7 @@ elif dept_idx == 2:
         )
 
 # ==========================================
-# 3. المدير / Manager (إدارة كاملة لجميع الأقسام)
+# 3. المدير / Manager
 # ==========================================
 elif dept_idx == 3:
     st.subheader(t["mgr_title"])
