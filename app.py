@@ -9,7 +9,7 @@ import streamlit.components.v1 as components
 
 MANAGER_PIN = "MGR-2026"
 
-conn = sqlite3.connect("enterprise_helpdesk_unified_card_v1.db", check_same_thread=False)
+conn = sqlite3.connect("enterprise_helpdesk_all_cards_v1.db", check_same_thread=False)
 cursor = conn.cursor()
 
 cursor.execute("""
@@ -193,7 +193,7 @@ def render_unified_document_card(
             f'</div>'
             f'</div>'
         )
-        card_height = 500
+        card_height = 505
     else:
         doc_title = "فاتورة متابعة الجهاز / Tracking Receipt"
         badge_bg = "#e0f2fe"
@@ -215,7 +215,7 @@ def render_unified_document_card(
             f'</div>'
             f'</div>'
         )
-        card_height = 415
+        card_height = 420
 
     card_html = (
         f'<div dir="{direction}" style="font-family:Segoe UI,Tahoma,sans-serif;background:#ffffff;border:1px solid #cbd5e1;border-radius:14px;padding:18px;color:#0f294a;">'
@@ -365,7 +365,7 @@ TEXTS = {
         "pay_methods": ["نقدي (Cash)", "مدى (Mada)", "بطاقة ائتمان / Apple Pay", "تحويل بنكي"],
         "active_ticket_bar": "التذكرة النشطة: <strong>{tid}</strong> &nbsp;|&nbsp; العميل: <strong>{cust}</strong> &nbsp;|&nbsp; الجهاز: <strong>{dev}</strong> &nbsp;|&nbsp; القسم: <strong>{stage}</strong> &nbsp;|&nbsp; الدفع: <strong>{pay}</strong>",
         "rec_title": "🛎️ قسم الاستقبال — تسجيل العميل ومواصفات الجهاز وإصدار فاتورة المتابعة",
-        "rec_caption": "يُصدر للعميل فاتورة متابعة بنفس البطاقة الموحدة بدون تفاصيل الحساب أو الدفع.",
+        "rec_caption": "يُصدر للعميل فاتورة متابعة بنفس البطاقة الموحدة الجديدة بدون تفاصيل الحساب أو الدفع.",
         "new_tid_msg": "**رقم التذكرة والفاتورة المخصص:** `{tid}`",
         "cust_name": "اسم العميل",
         "rec_staff": "اسم موظف الاستقبال",
@@ -431,7 +431,7 @@ TEXTS = {
         "save_diag_btn": "🛠️ حفظ عمل الفني ونقل التذكرة",
         "saved_diag_msg": "✅ تم حفظ عمل الفني للتذكرة `{tid}`.",
         "bill_title": "💳 قسم الحساب — تأكيد الدفع وإصدار الفاتورة",
-        "bill_caption": "يُعتمد الدفع وتُصدر فاتورة بنفس البطاقة الموحدة عند ضغط زر الطباعة.",
+        "bill_caption": "يُعتمد الدفع وتُصدر فاتورة بنفس البطاقة الموحدة الجديدة عند ضغط زر الطباعة.",
         "no_bill_tickets": "📭 لا توجد فواتير محوّلة إلى قسم الحساب حالياً.",
         "m_in_bill": "فواتير في الحساب",
         "m_paid": "فواتير مدفوعة",
@@ -484,10 +484,10 @@ TEXTS = {
         "mgr_notes_lbl": "الملاحظات والتقرير الفني",
         "mgr_save_edit_btn": "💾 حفظ جميع التعديلات على التذكرة",
         "mgr_saved_edit_msg": "✅ تم حفظ جميع تعديلات التذكرة `{tid}` وتحديث قسمها إلى `{stage}`.",
-        "mgr_preview_type": "نوع البطاقة للمعاينة / الطباعة:",
-        "mgr_preview_opts": ["فاتورة متابعة (بدون حساب)", "فاتورة صيانة ودفع"],
-        "mgr_show_card_btn": "🧾 معاينة البطاقة الموحدة",
-        "mgr_hide_card_btn": "✖️ إخفاء البطاقة",
+        "mgr_preview_type": "نوع الفاتورة للمعاينة / الطباعة للإدارة:",
+        "mgr_preview_opts": ["فاتورة صيانة ودفع", "فاتورة متابعة (بدون حساب)"],
+        "mgr_show_card_btn": "🧾 عرض الفاتورة بالشكل الجديد",
+        "mgr_hide_card_btn": "✖️ إخفاء الفاتورة",
         "search_lbl": "🔎 بحث برقم التذكرة أو اسم العميل أو موظف الاستقبال أو رقم الجوال أو S/N",
         "filt_dept": "فلترة بالقسم",
         "filt_pay": "فلترة بالدفع",
@@ -501,7 +501,7 @@ TEXTS = {
         "about_title": "📌 نبذة عن الموقع",
         "about_desc": (
             "نظام ويب متكامل لإدارة أعمال الدعم الفني وصيانة الجوالات والأجهزة اللوحية والحواسيب برقم تذكرة وفاتورة واحد ثابت: "
-            "الاستقبال (إيصال متابعة بنفس البطاقة الموحدة بدون حساب) ← الصيانة (كتابة ما عمله الفني) ← الحساب (تأكيد الدفع + طباعة الفاتورة بنفس البطاقة الموحدة)، "
+            "جميع الفواتير والإيصالات في الاستقبال والحساب والإدارة تعرض بنفس الشكل الجديد الموحّد، "
             "مع سجل تتبع للحركات ولوحة مدير محمية."
         ),
         "mgr_creds_title": "#### 🔑 بيانات دخول قسم المدير (لمسؤولي التوظيف والمستعرضين)",
@@ -509,8 +509,8 @@ TEXTS = {
         "mgr_pin_hint": "انتقل إلى تبويب «المدير» وأدخل الرقم أعلاه لتجربة الإدارة الكاملة لجميع الأقسام.",
         "feats_title": "#### ✨ أبرز مزايا النظام:",
         "feats": [
-            "- **بطاقة موحدة للعميل والإدارة:** نفس التنسيق في الاستقبال والحساب والمدير، مع إخفاء تفاصيل الحساب في إيصال المتابعة.",
-            "- **طباعة الفاتورة عند الطلب:** تظهر الفاتورة للموظف أو المدير عند ضغط زر العرض/الطباعة.",
+            "- **توحيد كامل لشكل جميع الفواتير:** كل فاتورة أو إيصال في الاستقبال والحساب والإدارة يظهر بنفس الشكل الجديد.",
+            "- **إظهار الفاتورة عند الطلب:** لا تظهر البطاقة إلا عند الضغط على زر العرض/الطباعة.",
             "- **سجل تتبع زمني (Audit Log):** يوثّق خطوات التذكرة عبر الأقسام بوضوح احترافي لمسؤولي التوظيف.",
         ],
     },
@@ -535,7 +535,7 @@ TEXTS = {
         "pay_methods": ["Cash", "Mada", "Credit Card / Apple Pay", "Bank Transfer"],
         "active_ticket_bar": "Active Ticket: <strong>{tid}</strong> &nbsp;|&nbsp; Customer: <strong>{cust}</strong> &nbsp;|&nbsp; Device: <strong>{dev}</strong> &nbsp;|&nbsp; Stage: <strong>{stage}</strong> &nbsp;|&nbsp; Payment: <strong>{pay}</strong>",
         "rec_title": "🛎️ Reception — Intake, Device Specs & Tracking Receipt",
-        "rec_caption": "Shows a tracking receipt using the same unified card without billing or payment fields.",
+        "rec_caption": "Shows a tracking receipt using the same new unified card without billing or payment fields.",
         "new_tid_msg": "**Ticket & Invoice ID:** `{tid}`",
         "cust_name": "Customer Name",
         "rec_staff": "Receptionist Name",
@@ -601,7 +601,7 @@ TEXTS = {
         "save_diag_btn": "🛠️ Save Technician Work & Forward",
         "saved_diag_msg": "✅ Technician work saved for ticket `{tid}`.",
         "bill_title": "💳 Billing — Payment Confirmation & Print Invoice",
-        "bill_caption": "Confirms payment and shows the invoice using the same unified card when clicking Print Invoice.",
+        "bill_caption": "Confirms payment and shows the invoice using the same new unified card when clicking Print Invoice.",
         "no_bill_tickets": "📭 No invoices transferred to Billing right now.",
         "m_in_bill": "Billing Invoices",
         "m_paid": "Paid Invoices",
@@ -654,10 +654,10 @@ TEXTS = {
         "mgr_notes_lbl": "Notes & Technical Report",
         "mgr_save_edit_btn": "💾 Save All Ticket Changes",
         "mgr_saved_edit_msg": "✅ Saved all updates for ticket `{tid}` and routed to `{stage}`.",
-        "mgr_preview_type": "Card Type to Preview / Print:",
-        "mgr_preview_opts": ["Tracking Receipt (No Billing)", "Service & Payment Invoice"],
-        "mgr_show_card_btn": "🧾 Preview Unified Card",
-        "mgr_hide_card_btn": "✖️ Hide Card",
+        "mgr_preview_type": "Invoice Type for Management Preview / Print:",
+        "mgr_preview_opts": ["Service & Payment Invoice", "Tracking Receipt (No Billing)"],
+        "mgr_show_card_btn": "🧾 Show Invoice in New Layout",
+        "mgr_hide_card_btn": "✖️ Hide Invoice",
         "search_lbl": "🔎 Search by Ticket ID, Customer, Receptionist, Mobile, or S/N",
         "filt_dept": "Filter by Stage",
         "filt_pay": "Filter by Payment",
@@ -671,7 +671,7 @@ TEXTS = {
         "about_title": "📌 About This App",
         "about_desc": (
             "A bilingual helpdesk & maintenance web app for smartphones, tablets, laptops, and desktops "
-            "with a single Ticket ID, unified card layout across Reception, Billing, and Manager, "
+            "with a single Ticket ID, the same new unified card layout across Reception, Billing, and Manager, "
             "written technician work log, status history audit log, and PIN-protected Manager view."
         ),
         "mgr_creds_title": "#### 🔑 Manager Access Credentials (For Recruiters & Reviewers)",
@@ -679,8 +679,8 @@ TEXTS = {
         "mgr_pin_hint": "Switch to the «Manager» tab and enter the PIN above to test full management across all departments.",
         "feats_title": "#### ✨ Key Features:",
         "feats": [
-            "- **Unified Card Layout:** Same layout for customer tracking and management views, hiding billing fields on tracking receipts.",
-            "- **On-Demand Invoice Print:** Shows the card when clicking Preview/Print.",
+            "- **Unified New Invoice Layout:** Every invoice or receipt in Reception, Billing, and Manager uses the same new design.",
+            "- **On-Demand Invoice Print:** Shows the card when clicking Show/Print.",
             "- **Status Audit Log:** Tracks stage transitions across Reception, Maintenance, and Billing for technical reviewers.",
         ],
     },
@@ -1470,7 +1470,7 @@ elif dept_idx == 3:
                     preview_row["customer_issue"] = ed_issue.strip()
                     preview_row["repaired_text"] = ed_rep.strip()
                     preview_row["priority"] = ed_prio.strip()
-                    is_bill_preview = (mgr_card_mode_lbl == t["mgr_preview_opts"][1])
+                    is_bill_preview = (mgr_card_mode_lbl == t["mgr_preview_opts"][0])
                     render_unified_document_card(
                         preview_row,
                         ed_stage_lbl,
