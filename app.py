@@ -1,3 +1,4 @@
+import json
 import random
 import sqlite3
 from datetime import datetime
@@ -6,7 +7,7 @@ import streamlit as st
 
 MANAGER_PIN = "MGR-2026"
 
-conn = sqlite3.connect("enterprise_helpdesk_specs_rec_text_v1.db", check_same_thread=False)
+conn = sqlite3.connect("enterprise_helpdesk_pro_v1.db", check_same_thread=False)
 cursor = conn.cursor()
 
 cursor.execute("""
@@ -26,9 +27,11 @@ cursor.execute("""
         decision TEXT,
         stage TEXT,
         payment_status TEXT,
+        payment_method TEXT,
         ticket_date TEXT,
         technician_name TEXT,
-        cost_est TEXT
+        cost_est TEXT,
+        status_history TEXT
     )
 """)
 conn.commit()
@@ -61,6 +64,89 @@ def normalize_payment(val):
 def is_mobile_or_tablet(dtype_str):
     keywords = ["جوال", "آيباد", "لوحي", "Smartphone", "iPad", "Tablet"]
     return any(k in (dtype_str or "") for k in keywords)
+
+
+def append_history(existing_json, actor_stage, summary_text):
+    try:
+        items = json.loads(existing_json) if existing_json else []
+        if not isinstance(items, list):
+            items = []
+    except Exception:
+        items = []
+    stamp = datetime.now().strftime("%Y-%m-%d %H:%M")
+    items.append(f"[{stamp}] {actor_stage}: {summary_text}")
+    return json.dumps(items, ensure_ascii=False)
+
+
+def parse_history(raw_json):
+    try:
+        items = json.loads(raw_json) if raw_json else []
+        return items if isinstance(items, list) else []
+    except Exception:
+        return []
+
+
+def build_reception_receipt(row_dict, stage_label):
+    lines = [
+        "==========================================",
+        "   DEVICE INTAKE & TRACKING RECEIPT",
+        "   فاتورة / إيصال استلام ومتابعة الجهاز",
+        "==========================================",
+        f"Ticket / Tracking ID : {row_dict['ticket_id']}",
+        f"Intake Date          : {row_dict['ticket_date']}",
+        f"Current Stage        : {stage_label}",
+        f"Priority             : {row_dict['priority']}",
+        "------------------------------------------",
+        f"Customer Name        : {row_dict['customer_name']}",
+        f"Customer Phone       : {row_dict['customer_phone']}",
+        f"Reception Staff      : {row_dict['reception_staff']}",
+        "------------------------------------------",
+        f"Device Type          : {row_dict['device_type']}",
+        f"Brand                : {row_dict['brand']}",
+        f"Serial / IMEI        : {row_dict['device_sn']}",
+        f"Device Specs         : {row_dict['device_specs']}",
+        "------------------------------------------",
+        "Reported Device Issue (مشكلة الجهاز):",
+        f"{row_dict['customer_issue']}",
+        "==========================================",
+        "Keep this Ticket ID to track your device status.",
+    ]
+    return "\n".join(lines)
+
+
+def build_billing_invoice(row_dict, stage_label, pay_label, method_label, final_amount):
+    lines = [
+        "==========================================",
+        "   SERVICE COMPLETION & PAYMENT INVOICE",
+        "   فاتورة الصيانة والدفع النهائية",
+        "==========================================",
+        f"Ticket / Invoice ID  : {row_dict['ticket_id']}",
+        f"Date                 : {row_dict['ticket_date']}",
+        f"Current Stage        : {stage_label}",
+        "------------------------------------------",
+        f"Customer Name        : {row_dict['customer_name']}",
+        f"Customer Phone       : {row_dict['customer_phone']}",
+        f"Technician           : {row_dict['technician_name']}",
+        "------------------------------------------",
+        f"Device               : {row_dict['device_type']} - {row_dict['brand']}",
+        f"Serial / IMEI        : {row_dict['device_sn']}",
+        f"Device Specs         : {row_dict['device_specs']}",
+        "------------------------------------------",
+        "1) Reported Issue (مشكلة الجهاز):",
+        f"{row_dict['customer_issue']}",
+        "",
+        "2) Technician Work Done (ما عمله الفني):",
+        f"{row_dict['repaired_text']}",
+        "",
+        f"Decision / Action    : {row_dict['decision']}",
+        f"Technician Notes     : {row_dict['tech_notes'] or '-'}",
+        "------------------------------------------",
+        f"Invoice Amount       : {final_amount}",
+        f"Payment Status       : {pay_label}",
+        f"Payment Method       : {method_label}",
+        "==========================================",
+    ]
+    return "\n".join(lines)
 
 
 DEVICE_BRANDS = {
@@ -108,36 +194,51 @@ def load_demo_data():
         (
             "TK-40101", "ريما القحطاني", "سالم الدوسري", "0501122334", "SN-IP-77412",
             "جوال (Smartphone)", "Apple",
-            "256 GB | iOS / iPadOS | العمر: 2 سنة",
+            "256 GB | iOS / iPadOS | 2 سنة",
             "البطارية تفرغ بسرعة خلال ساعتين وتنطفئ فجأة عند 25%.",
             "تم استبدال البطارية التالفة وفحص دورة الشحن بالكامل.",
             "تم اختبار الجهاز بعد الإصلاح وثبتت كفاءة الشحن.",
-            "Medium", "Battery Replacement", "Billing", "Unpaid", "2026-11-18",
-            "فهد المطيري", "250 SAR"
+            "متوسطة", "إصلاح عطل / استبدال قطعة", "Billing", "Paid", "مدى (Mada)",
+            "2026-11-18", "فهد المطيري", "250 SAR",
+            append_history(
+                append_history(
+                    append_history("[]", "الاستقبال", "تم تسجيل الجهاز وإصدار إيصال المتابعة."),
+                    "الصيانة",
+                    "تم استبدال البطارية وتوثيق العمل الفني."
+                ),
+                "الحساب",
+                "تم تأكيد الدفع عبر مدى وإصدار الفاتورة النهائية."
+            )
         ),
         (
             "TK-40102", "عمر الزهراني", "سالم الدوسري", "0559988776", "SN-HP-61904",
             "لابتوب (Laptop)", "HP",
-            "8 GB | SATA SSD | العمر: 2 سنة",
+            "8 GB | SATA SSD | 2 سنة",
             "الجهاز يفصل الواي فاي باستمرار ويوجد بطء في فتح البرامج.",
             "لم يُسجل بعد",
             "جاري فحص تعريف الشبكة وصيانة النظام.",
-            "Normal", "Software & Preventive", "Maintenance", "Unpaid", "2026-11-19",
-            "فهد المطيري", "90 SAR"
+            "عادية", "صيانة برمجية ونظام", "Maintenance", "Unpaid", "لم يُحدد بعد",
+            "2026-11-19", "فهد المطيري", "90 SAR",
+            append_history(
+                append_history("[]", "الاستقبال", "تم تسجيل الجهاز وإصدار إيصال المتابعة."),
+                "الصيانة",
+                "الجهاز قيد الفحص الفني."
+            )
         ),
         (
             "TK-40103", "لينا الشهري", "سالم الدوسري", "0544433221", "SN-LN-48290",
             "كمبيوتر مكتبي (Desktop PC)", "Lenovo",
-            "8 GB | HDD تقليدي | العمر: 8 سنوات",
+            "8 GB | HDD تقليدي | 8 سنوات",
             "يصدر صوت طقطقة من الداخل ولا يقلع إلى النظام.",
             "لم يُسجل بعد",
             "تم فحص القرص الميكانيكي ويوصى باستبدال الجهاز.",
-            "Urgent", "Device Replacement", "Maintenance", "Unpaid", "2026-11-20",
-            "فهد المطيري", "3,200 SAR"
+            "عاجلة", "توصية باستبدال الجهاز", "Maintenance", "Unpaid", "لم يُحدد بعد",
+            "2026-11-20", "فهد المطيري", "3,200 SAR",
+            append_history("[]", "الاستقبال", "تم تسجيل الجهاز وإصدار إيصال المتابعة.")
         ),
     ]
     cursor.executemany(
-        "INSERT OR IGNORE INTO tickets VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        "INSERT OR IGNORE INTO tickets VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
         sample_tickets
     )
     conn.commit()
@@ -149,7 +250,7 @@ TEXTS = {
         "dir": "rtl",
         "align": "right",
         "banner_title": "🏢 نظام إدارة مركز الصيانة والدعم الفني",
-        "banner_sub": "مسار فاتورة وتذكرة موحد من الاستقبال إلى الصيانة ثم الحساب",
+        "banner_sub": "مسار فاتورة وتذكرة موحد مع سجل تتبع من الاستقبال إلى الصيانة ثم الحساب",
         "nav_label": "انتقل بين الأقسام:",
         "depts": ["الاستقبال", "الصيانة", "الحساب", "المدير", "نبذة عن الموقع"],
         "stage_lbl": {
@@ -162,9 +263,10 @@ TEXTS = {
             "Unpaid": "غير مدفوع",
             "Paid": "مدفوع",
         },
+        "pay_methods": ["نقدي (Cash)", "مدى (Mada)", "بطاقة ائتمان / Apple Pay", "تحويل بنكي"],
         "active_ticket_bar": "**التذكرة النشطة:** `{tid}` | **العميل:** {cust} | **الجهاز:** {dev} | **القسم الحالي:** `{stage}`",
-        "rec_title": "🛎️ قسم الاستقبال — تسجيل العميل ومواصفات الجهاز",
-        "rec_caption": "يتم تسجيل بيانات العميل ومواصفات الجهاز ومشكلة العميل في الاستقبال برقم تذكرة ثابت.",
+        "rec_title": "🛎️ قسم الاستقبال — تسجيل العميل ومواصفات الجهاز وإصدار فاتورة المتابعة",
+        "rec_caption": "يُصدر للعميل فاتورة/إيصال متابعة برقم تذكرة موحد لمتابعة حالة جهازه.",
         "new_tid_msg": "**رقم التذكرة والفاتورة المخصص:** `{tid}`",
         "cust_name": "اسم العميل",
         "rec_staff": "اسم موظف الاستقبال",
@@ -187,14 +289,17 @@ TEXTS = {
         "init_note": "وصف المشكلة من العميل عند الاستقبال:",
         "init_note_ph": "مثال: الشاشة مكسورة، البطارية تفرغ بسرعة، أو الجهاز بطيء...",
         "go_maint": "نقل التذكرة بنفس الرقم إلى قسم الصيانة بعد الحفظ",
-        "save_rec_btn": "📥 حفظ التذكرة وتحويلها",
+        "save_rec_btn": "📥 حفظ التذكرة وإصدار فاتورة المتابعة",
         "default_rec_note": "تم تسجيل الجهاز في الاستقبال بانتظار الصيانة.",
-        "saved_rec_msg": "✅ تم حفظ التذكرة برقم `{tid}`.",
-        "reg_tickets": "📋 التذاكر المسجلة في الاستقبال",
+        "saved_rec_msg": "✅ تم حفظ التذكرة برقم `{tid}` وإصدار فاتورة المتابعة.",
+        "dl_intake_receipt": "📄 تحميل فاتورة متابعة الجهاز للعميل (.txt)",
+        "reg_tickets": "📋 التذاكر المسجلة وتتبع حالة الجهاز",
+        "track_pick": "اختر تذكرة لعرض فاتورة المتابعة وسجل الحركات:",
+        "timeline_title": "🕒 سجل تتبع حالة الجهاز (Audit Log)",
         "no_tickets": "لا توجد تذاكر مسجلة بعد.",
         "load_demo": "✨ تعبئة بيانات تجريبية للاختبار",
-        "maint_title": "🔧 قسم الصيانة — تسجيل ما تم إصلاحه كتابةً",
-        "maint_caption": "يعرض معلومات ومواصفات الجهاز الواردة من الاستقبال ويكتب الفني ما تم إصلاحه كتابةً.",
+        "maint_title": "🔧 قسم الصيانة — كتابة ما عمله الفني",
+        "maint_caption": "يعرض بيانات الجهاز ومشكلة العميل ويكتب الفني ما عمله بالتفصيل.",
         "no_maint_tickets": "📭 لا توجد تذاكر مخصصة لقسم الصيانة حالياً.",
         "go_rec_btn": "🛎️ الذهاب لقسم الاستقبال",
         "pick_ticket_maint": "اختر الجهاز / التذكرة الموجودة في الصيانة:",
@@ -202,13 +307,13 @@ TEXTS = {
         "cust_info_line": "**العميل:** {cust} | **موظف الاستقبال:** {staff} | **رقم الجوال:** {phone}",
         "dev_info_line": "**معلومات الجهاز:** {dtype} — {brand} (`{sn}`)",
         "specs_info_line": "**مواصفات الجهاز:** {specs}",
-        "cust_issue_box": "**📝 وصف المشكلة عند الاستقبال:** {issue}",
-        "repaired_box": "**✍️ ما تم إصلاحه مسجلاً:** {rep}",
+        "cust_issue_box": "**📝 مشكلة الجهاز عند الاستقبال:** {issue}",
+        "repaired_box": "**✍️ ما عمله الفني مسجلاً:** {rep}",
         "prev_notes": "**ملاحظات فنية سابقة:** {notes}",
-        "repair_write_sec": "#### 1️⃣ كتابة ما تم إصلاحه في الجهاز",
-        "repaired_lbl": "اكتب ما تم إصلاحه بالتفصيل:",
-        "repaired_ph": "مثال: تم استبدال الشاشة وتنظيف منفذ الشحن وإعادة ضبط النظام...",
-        "repaired_empty_msg": "لم يُسجل نص إصلاح بعد",
+        "repair_write_sec": "#### 1️⃣ كتابة ما عمله الفني في الجهاز",
+        "repaired_lbl": "اكتب ما عمله الفني بالتفصيل:",
+        "repaired_ph": "مثال: تم فحص الدائرة وتغيير الشاشة وتنظيف المروحة واختبار التشغيل...",
+        "repaired_empty_msg": "لم يُسجل عمل الفني بعد",
         "cost_sec": "#### 2️⃣ التكلفة وتقرير الفني",
         "decision_lbl": "الإجراء / التشخيص النهائي",
         "decision_opts": [
@@ -221,10 +326,10 @@ TEXTS = {
         "tech_lbl": "اسم فني الصيانة",
         "tech_notes_lbl": "ملاحظات إضافية لفني الصيانة:",
         "send_bill": "نقل التذكرة بنفس الرقم إلى قسم الحساب بعد الحفظ",
-        "save_diag_btn": "🛠️ حفظ ما تم إصلاحه ونقل التذكرة",
-        "saved_diag_msg": "✅ تم حفظ ما تم إصلاحه للتذكرة `{tid}`.",
-        "bill_title": "💳 قسم الحساب — الفواتير واعتماد الدفع",
-        "bill_caption": "تظهر هنا الفواتير والتذاكر المحوّلة إلى قسم الحساب فقط.",
+        "save_diag_btn": "🛠️ حفظ عمل الفني ونقل التذكرة",
+        "saved_diag_msg": "✅ تم حفظ عمل الفني للتذكرة `{tid}`.",
+        "bill_title": "💳 قسم الحساب — تأكيد الدفع وإصدار الفاتورة النهائية",
+        "bill_caption": "يُعتمد الدفع وتُصدر فاتورة واضحة تشمل حالة الدفع ومشكلة الجهاز وما عمله الفني.",
         "no_bill_tickets": "📭 لا توجد فواتير محوّلة إلى قسم الحساب حالياً.",
         "m_in_bill": "فواتير في الحساب",
         "m_paid": "فواتير مدفوعة",
@@ -233,15 +338,17 @@ TEXTS = {
         "pay_filter_opts": ["الكل", "غير مدفوع", "مدفوع"],
         "bill_table_title": "#### 📄 فواتير قسم الحساب",
         "no_matching_bills": "لا توجد فواتير في قسم الحساب تطابق حالة الدفع المحددة.",
-        "bill_mgmt": "#### 🧾 اعتماد / تحديث فاتورة التذكرة",
+        "bill_mgmt": "#### 🧾 اعتماد الدفع وإصدار الفاتورة",
         "pick_ticket_bill": "اختر الفاتورة المخصصة للحساب:",
         "final_cost": "مبلغ الفاتورة (ر.س)",
         "pay_status": "حالة الدفع",
         "pay_opts": ["غير مدفوع", "مدفوع"],
+        "pay_method_lbl": "طريقة الدفع",
         "move_stage": "إبقاء الفاتورة في الحساب أو إعادتها للصيانة:",
         "bill_stage_choices": ["الحساب", "الصيانة"],
-        "save_bill_btn": "💾 حفظ الفاتورة وتحديث حالة الدفع",
-        "dl_invoice": "📥 تحميل الفاتورة (.txt)",
+        "save_bill_btn": "💾 حفظ حالة الدفع وإصدار الفاتورة",
+        "paid_confirm_msg": "✅ تم حفظ الفاتورة وتحديث حالة الدفع: **{pay}** ({method}).",
+        "dl_invoice": "📥 تحميل فاتورة الدفع والعمل الفني (.txt)",
         "dl_csv_bill": "📊 تصدير فواتير الحساب (.csv)",
         "mgr_title": "🔐 قسم المدير — إدارة كاملة لجميع الأقسام",
         "mgr_warn": "هذا القسم مخصص للمدير ولا يُفتح إلا برقم الدخول الخاص. يمكن لمسؤول التوظيف الاطلاع على الرقم في تبويب «نبذة عن الموقع».",
@@ -270,7 +377,7 @@ TEXTS = {
         "mgr_pick_edit": "اختر التذكرة المراد إدارتها أو تعديلها:",
         "mgr_stage_lbl": "تحويل التذكرة إلى القسم",
         "mgr_specs_lbl": "مواصفات الجهاز",
-        "mgr_rep_lbl": "ما تم إصلاحه (كتابة)",
+        "mgr_rep_lbl": "ما عمله الفني (كتابة)",
         "mgr_notes_lbl": "الملاحظات والتقرير الفني",
         "mgr_save_edit_btn": "💾 حفظ جميع التعديلات على التذكرة",
         "mgr_saved_edit_msg": "✅ تم حفظ جميع تعديلات التذكرة `{tid}` وتحديث قسمها إلى `{stage}`.",
@@ -287,16 +394,17 @@ TEXTS = {
         "about_title": "📌 نبذة عن الموقع",
         "about_desc": (
             "نظام ويب متكامل لإدارة أعمال الدعم الفني وصيانة الجوالات والأجهزة اللوحية والحواسيب برقم تذكرة وفاتورة واحد ثابت: "
-            "الاستقبال (مع مواصفات الجهاز) ← الصيانة (تسجيل ما تم إصلاحه كتابةً) ← الحساب، مع إدارة كاملة في لوحة المدير."
+            "الاستقبال (فاتورة متابعة + مواصفات الجهاز) ← الصيانة (كتابة ما عمله الفني) ← الحساب (تأكيد الدفع + فاتورة نهائية)، "
+            "مع سجل تتبع للحركات ولوحة مدير محمية."
         ),
         "mgr_creds_title": "#### 🔑 بيانات دخول قسم المدير (لمسؤولي التوظيف والمستعرضين)",
         "mgr_pin_line": "**رقم الدخول الخاص بالمدير:** `{pin}`",
         "mgr_pin_hint": "انتقل إلى تبويب «المدير» وأدخل الرقم أعلاه لتجربة الإدارة الكاملة لجميع الأقسام.",
         "feats_title": "#### ✨ أبرز مزايا النظام:",
         "feats": [
-            "- **مواصفات الجهاز في الاستقبال:** تسجيل مواصفات الجهاز مباشرة في قسم الاستقبال وعرضها بوضوح.",
-            "- **كتابة ما تم إصلاحه:** يكتب فني الصيانة نصاً واضحاً لما تم إصلاحه في الجهاز.",
-            "- **إدارة كاملة في قسم المدير:** إنشاء تذاكر، تعديل أي تذكرة، وتحويلها بين الأقسام وتحديث الدفع.",
+            "- **فاتورة متابعة من الاستقبال:** يصدر إيصال متابعة برقم التذكرة ليتمكن العميل من تتبع حالة جهازه.",
+            "- **فاتورة دفع شاملة في الحساب:** توضح حالة الدفع وطريقة الدفع ومشكلة الجهاز وما عمله الفني كتابياً.",
+            "- **سجل تتبع زمني (Audit Log):** يوثّق خطوات التذكرة عبر الأقسام بوضوح احترافي لمسؤولي التوظيف.",
         ],
     },
     "en": {
@@ -304,7 +412,7 @@ TEXTS = {
         "dir": "ltr",
         "align": "left",
         "banner_title": "🏢 IT Helpdesk & Maintenance System",
-        "banner_sub": "Single-ID ticket & invoice flow from Reception to Maintenance and Billing",
+        "banner_sub": "Unified ticket & invoice workflow with audit history from Reception to Maintenance and Billing",
         "nav_label": "Navigate departments:",
         "depts": ["Reception", "Maintenance", "Billing", "Manager", "About"],
         "stage_lbl": {
@@ -317,9 +425,10 @@ TEXTS = {
             "Unpaid": "Unpaid",
             "Paid": "Paid",
         },
+        "pay_methods": ["Cash", "Mada", "Credit Card / Apple Pay", "Bank Transfer"],
         "active_ticket_bar": "**Active Ticket:** `{tid}` | **Customer:** {cust} | **Device:** {dev} | **Stage:** `{stage}`",
-        "rec_title": "🛎️ Reception — Customer Registration & Device Specs",
-        "rec_caption": "Registers customer info, device specs, and reported issue at Reception under a single ticket ID.",
+        "rec_title": "🛎️ Reception — Intake, Device Specs & Tracking Receipt",
+        "rec_caption": "Issues a tracking receipt with a unified Ticket ID so the customer can follow up on their device.",
         "new_tid_msg": "**Ticket & Invoice ID:** `{tid}`",
         "cust_name": "Customer Name",
         "rec_staff": "Receptionist Name",
@@ -339,17 +448,20 @@ TEXTS = {
         "priority": "Priority",
         "priorities": ["Normal", "Medium", "Urgent"],
         "rec_date": "Reception Date",
-        "init_note": "Customer issue description at reception:",
+        "init_note": "Reported device issue at reception:",
         "init_note_ph": "Example: Cracked screen, fast battery drain, or slow performance...",
         "go_maint": "Send ticket with the same ID to Maintenance after saving",
-        "save_rec_btn": "📥 Save Ticket & Forward",
+        "save_rec_btn": "📥 Save Ticket & Issue Tracking Receipt",
         "default_rec_note": "Registered at reception pending maintenance.",
-        "saved_rec_msg": "✅ Ticket `{tid}` saved.",
-        "reg_tickets": "📋 Registered Tickets",
+        "saved_rec_msg": "✅ Ticket `{tid}` saved and tracking receipt generated.",
+        "dl_intake_receipt": "📄 Download Device Tracking Receipt (.txt)",
+        "reg_tickets": "📋 Registered Tickets & Device Tracking",
+        "track_pick": "Select a ticket to view its tracking receipt and history:",
+        "timeline_title": "🕒 Device Status Audit Log",
         "no_tickets": "No tickets registered yet.",
         "load_demo": "✨ Load Demo Data",
-        "maint_title": "🔧 Maintenance — Written Repair Log",
-        "maint_caption": "Displays device info and specs from Reception, and lets the technician write what was repaired.",
+        "maint_title": "🔧 Maintenance — Technician Work Done",
+        "maint_caption": "Displays device details and reported issue, and lets the technician write what work was done.",
         "no_maint_tickets": "📭 No tickets assigned to Maintenance right now.",
         "go_rec_btn": "🛎️ Go to Reception",
         "pick_ticket_maint": "Select Maintenance ticket / device:",
@@ -357,13 +469,13 @@ TEXTS = {
         "cust_info_line": "**Customer:** {cust} | **Receptionist:** {staff} | **Mobile:** {phone}",
         "dev_info_line": "**Device Info:** {dtype} — {brand} (`{sn}`)",
         "specs_info_line": "**Device Specs:** {specs}",
-        "cust_issue_box": "**📝 Reported Issue at Reception:** {issue}",
-        "repaired_box": "**✍️ Written Repair Summary:** {rep}",
+        "cust_issue_box": "**📝 Reported Device Issue:** {issue}",
+        "repaired_box": "**✍️ Technician Work Done:** {rep}",
         "prev_notes": "**Previous Technician Notes:** {notes}",
-        "repair_write_sec": "#### 1️⃣ Write What Was Repaired",
-        "repaired_lbl": "Write what was repaired on the device:",
-        "repaired_ph": "Example: Replaced display assembly, cleaned charging port, and reset OS...",
-        "repaired_empty_msg": "No repair text written yet",
+        "repair_write_sec": "#### 1️⃣ Write Technician Work Done",
+        "repaired_lbl": "Write what the technician did on the device:",
+        "repaired_ph": "Example: Replaced display assembly, cleaned thermal paste & fan, and verified boot...",
+        "repaired_empty_msg": "No technician work logged yet",
         "cost_sec": "#### 2️⃣ Cost & Technician Notes",
         "decision_lbl": "Final Action / Diagnosis",
         "decision_opts": [
@@ -376,11 +488,11 @@ TEXTS = {
         "tech_lbl": "Technician Name",
         "tech_notes_lbl": "Additional Technician Notes:",
         "send_bill": "Send ticket with the same ID to Billing after saving",
-        "save_diag_btn": "🛠️ Save Repair Log & Forward",
-        "saved_diag_msg": "✅ Repair log saved for ticket `{tid}`.",
-        "bill_title": "💳 Billing — Invoices & Payment Status",
-        "bill_caption": "Only invoices transferred to Billing are shown here.",
-        "no_bill_tickets": "📭 No invoices assigned to Billing right now.",
+        "save_diag_btn": "🛠️ Save Technician Work & Forward",
+        "saved_diag_msg": "✅ Technician work saved for ticket `{tid}`.",
+        "bill_title": "💳 Billing — Payment Confirmation & Final Invoice",
+        "bill_caption": "Confirms payment and issues a complete invoice with payment status, reported issue, and technician work done.",
+        "no_bill_tickets": "📭 No invoices transferred to Billing right now.",
         "m_in_bill": "Billing Invoices",
         "m_paid": "Paid Invoices",
         "m_unpaid": "Unpaid Invoices",
@@ -388,15 +500,17 @@ TEXTS = {
         "pay_filter_opts": ["All", "Unpaid", "Paid"],
         "bill_table_title": "#### 📄 Billing Invoices",
         "no_matching_bills": "No Billing invoices match the selected payment status.",
-        "bill_mgmt": "#### 🧾 Ticket Invoice & Payment",
+        "bill_mgmt": "#### 🧾 Payment Confirmation & Invoice Issuance",
         "pick_ticket_bill": "Select Billing invoice:",
         "final_cost": "Invoice Amount (SAR)",
         "pay_status": "Payment Status",
         "pay_opts": ["Unpaid", "Paid"],
+        "pay_method_lbl": "Payment Method",
         "move_stage": "Keep in Billing or return to Maintenance:",
         "bill_stage_choices": ["Billing", "Maintenance"],
-        "save_bill_btn": "💾 Save Invoice & Payment",
-        "dl_invoice": "📥 Download Invoice (.txt)",
+        "save_bill_btn": "💾 Save Payment & Issue Invoice",
+        "paid_confirm_msg": "✅ Saved invoice and payment status: **{pay}** ({method}).",
+        "dl_invoice": "📥 Download Payment & Work Invoice (.txt)",
         "dl_csv_bill": "📊 Export Billing Invoices (.csv)",
         "mgr_title": "🔐 Manager — Full Management Across All Departments",
         "mgr_warn": "Restricted to Manager access. Recruiters can view the demo PIN under the «About» tab.",
@@ -425,7 +539,7 @@ TEXTS = {
         "mgr_pick_edit": "Select ticket to manage or edit:",
         "mgr_stage_lbl": "Route Ticket to Department",
         "mgr_specs_lbl": "Device Specs",
-        "mgr_rep_lbl": "What Was Repaired (Written)",
+        "mgr_rep_lbl": "Technician Work Done (Written)",
         "mgr_notes_lbl": "Notes & Technical Report",
         "mgr_save_edit_btn": "💾 Save All Ticket Changes",
         "mgr_saved_edit_msg": "✅ Saved all updates for ticket `{tid}` and routed to `{stage}`.",
@@ -442,17 +556,17 @@ TEXTS = {
         "about_title": "📌 About This App",
         "about_desc": (
             "A bilingual helpdesk & maintenance web app for smartphones, tablets, laptops, and desktops "
-            "tracking a single ticket & invoice ID across Reception (with device specs) -> Maintenance "
-            "(written repair summary) -> Billing, with full multi-department control in the Manager view."
+            "with a single Ticket ID, intake tracking receipt, written technician work log, payment confirmation invoice, "
+            "status history audit log, and PIN-protected Manager view."
         ),
         "mgr_creds_title": "#### 🔑 Manager Access Credentials (For Recruiters & Reviewers)",
         "mgr_pin_line": "**Manager Access PIN:** `{pin}`",
         "mgr_pin_hint": "Switch to the «Manager» tab and enter the PIN above to test full management across all departments.",
         "feats_title": "#### ✨ Key Features:",
         "feats": [
-            "- **Device Specs at Reception:** Capture device specifications directly in Reception and display them clearly.",
-            "- **Written Repair Summary:** Technicians write a clear free-text summary of what was repaired.",
-            "- **Full Manager Control:** Create tickets, edit any ticket, route across Reception, Maintenance, and Billing, and update payment status.",
+            "- **Intake Tracking Receipt:** Generates a tracking receipt with the Ticket ID so customers can follow up on their device.",
+            "- **Complete Billing Invoice:** Displays payment status, payment method, reported device issue, and technician work done.",
+            "- **Status Audit Log:** Tracks stage transitions across Reception, Maintenance, and Billing for technical reviewers.",
         ],
     },
 }
@@ -598,7 +712,7 @@ if st.session_state.current_ticket_id and not df_all.empty:
 st.markdown("---")
 
 # ==========================================
-# 0. الاستقبال / Reception (يشمل مواصفات الجهاز)
+# 0. الاستقبال / Reception (فاتورة متابعة + مواصفات الجهاز)
 # ==========================================
 if dept_idx == 0:
     st.subheader(t["rec_title"])
@@ -655,9 +769,10 @@ if dept_idx == 0:
         issue_val = initial_note.strip() if initial_note.strip() else t["default_rec_note"]
         age_unit = "سنوات" if st.session_state.lang == "ar" and device_age != 1 else ("سنة" if st.session_state.lang == "ar" else "yrs")
         specs_val = f"{spec_a} | {spec_b} | {device_age} {age_unit}"
+        init_hist = append_history("[]", t["depts"][0], f"تم فتح التذكرة وإصدار فاتورة متابعة -> {t['stage_lbl'][next_stage]}")
 
         cursor.execute("""
-            INSERT OR REPLACE INTO tickets VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            INSERT OR REPLACE INTO tickets VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """, (
             active_new_id,
             customer_name.strip(),
@@ -674,9 +789,11 @@ if dept_idx == 0:
             "Pending",
             next_stage,
             "Unpaid",
+            "لم يُحدد بعد",
             str(ticket_date),
             "فهد المطيري",
             "0 SAR",
+            init_hist,
         ))
         conn.commit()
 
@@ -703,13 +820,13 @@ if dept_idx == 0:
                 "ticket_id": "رقم التذكرة",
                 "customer_name": "اسم العميل",
                 "device_type": "نوع الجهاز",
-                "brand": "الشركة",
                 "device_specs": "مواصفات الجهاز",
-                "customer_issue": "وصف المشكلة",
+                "customer_issue": "مشكلة الجهاز",
                 "stage_disp": "القسم الحالي",
+                "pay_disp": "الدفع",
             })
             st.dataframe(
-                disp_df[["رقم التذكرة", "اسم العميل", "نوع الجهاز", "الشركة", "مواصفات الجهاز", "وصف المشكلة", "القسم الحالي"]],
+                disp_df[["رقم التذكرة", "اسم العميل", "نوع الجهاز", "مواصفات الجهاز", "مشكلة الجهاز", "القسم الحالي", "الدفع"]],
                 use_container_width=True,
             )
         else:
@@ -717,18 +834,38 @@ if dept_idx == 0:
                 "ticket_id": "Ticket ID",
                 "customer_name": "Customer",
                 "device_type": "Device",
-                "brand": "Brand",
                 "device_specs": "Device Specs",
                 "customer_issue": "Reported Issue",
                 "stage_disp": "Stage",
+                "pay_disp": "Payment",
             })
             st.dataframe(
-                disp_df[["Ticket ID", "Customer", "Device", "Brand", "Device Specs", "Reported Issue", "Stage"]],
+                disp_df[["Ticket ID", "Customer", "Device", "Device Specs", "Reported Issue", "Stage", "Payment"]],
                 use_container_width=True,
             )
 
+        rec_ids = df_all["ticket_id"].tolist()
+        rec_def = 0
+        if st.session_state.current_ticket_id in rec_ids:
+            rec_def = rec_ids.index(st.session_state.current_ticket_id)
+        picked_rec_id = st.selectbox(t["track_pick"], rec_ids, index=rec_def)
+        r_row = df_all[df_all["ticket_id"] == picked_rec_id].iloc[0].to_dict()
+        r_row["stage_disp"] = df_all[df_all["ticket_id"] == picked_rec_id].iloc[0]["stage_disp"]
+
+        intake_txt = build_reception_receipt(r_row, r_row["stage_disp"])
+        st.download_button(
+            label=t["dl_intake_receipt"],
+            data=intake_txt,
+            file_name=f"Tracking_Receipt_{picked_rec_id}.txt",
+            mime="text/plain",
+        )
+
+        st.markdown(f"##### {t['timeline_title']}")
+        for h_item in parse_history(r_row.get("status_history", "[]")):
+            st.caption(f"• {h_item}")
+
 # ==========================================
-# 1. الصيانة / Maintenance (كتابة ما تم إصلاحه كتابةً)
+# 1. الصيانة / Maintenance (كتابة ما عمله الفني)
 # ==========================================
 elif dept_idx == 1:
     st.subheader(t["maint_title"])
@@ -776,7 +913,7 @@ elif dept_idx == 1:
                 st.info(t["prev_notes"].format(notes=row["tech_notes"]))
 
         st.markdown(t["repair_write_sec"])
-        default_rep_val = "" if row["repaired_text"] in ["لم يُسجل بعد", "No repair text written yet"] else row["repaired_text"]
+        default_rep_val = "" if row["repaired_text"] in ["لم يُسجل عمل الفني بعد", "No technician work logged yet"] else row["repaired_text"]
         repaired_input = st.text_area(t["repaired_lbl"], value=default_rep_val, placeholder=t["repaired_ph"])
 
         st.markdown(t["cost_sec"])
@@ -794,11 +931,16 @@ elif dept_idx == 1:
         if st.button(t["save_diag_btn"], type="primary"):
             rep_final = repaired_input.strip() if repaired_input.strip() else t["repaired_empty_msg"]
             new_stage = "Billing" if send_to_billing else "Maintenance"
+            upd_hist = append_history(
+                row.get("status_history", "[]"),
+                t["depts"][1],
+                f"تم تسجيل عمل الفني ({rep_final[:45]}) -> {t['stage_lbl'][new_stage]}"
+            )
 
             cursor.execute("""
                 UPDATE tickets
                 SET repaired_text = ?, tech_notes = ?, decision = ?,
-                    stage = ?, technician_name = ?, cost_est = ?
+                    stage = ?, technician_name = ?, cost_est = ?, status_history = ?
                 WHERE ticket_id = ?
             """, (
                 rep_final,
@@ -807,6 +949,7 @@ elif dept_idx == 1:
                 new_stage,
                 tech_person.strip(),
                 est_cost_input.strip(),
+                upd_hist,
                 chosen_id,
             ))
             conn.commit()
@@ -820,7 +963,7 @@ elif dept_idx == 1:
                 st.rerun()
 
 # ==========================================
-# 2. الحساب / Billing (فواتير الحساب فقط)
+# 2. الحساب / Billing (الدفع + فاتورة شاملة)
 # ==========================================
 elif dept_idx == 2:
     st.subheader(t["bill_title"])
@@ -855,28 +998,28 @@ elif dept_idx == 2:
                 disp_bill = filtered_bill.rename(columns={
                     "ticket_id": "رقم التذكرة",
                     "customer_name": "اسم العميل",
-                    "device_type": "الجهاز",
-                    "device_specs": "مواصفات الجهاز",
-                    "repaired_text": "ما تم إصلاحه",
+                    "customer_issue": "مشكلة الجهاز",
+                    "repaired_text": "ما عمله الفني",
                     "cost_est": "المبلغ",
                     "pay_disp": "حالة الدفع",
+                    "payment_method": "طريقة الدفع",
                 })
                 st.dataframe(
-                    disp_bill[["رقم التذكرة", "اسم العميل", "الجهاز", "مواصفات الجهاز", "ما تم إصلاحه", "المبلغ", "حالة الدفع"]],
+                    disp_bill[["رقم التذكرة", "اسم العميل", "مشكلة الجهاز", "ما عمله الفني", "المبلغ", "حالة الدفع", "طريقة الدفع"]],
                     use_container_width=True,
                 )
             else:
                 disp_bill = filtered_bill.rename(columns={
                     "ticket_id": "Ticket ID",
                     "customer_name": "Customer",
-                    "device_type": "Device",
-                    "device_specs": "Device Specs",
-                    "repaired_text": "Repaired",
+                    "customer_issue": "Reported Issue",
+                    "repaired_text": "Technician Work",
                     "cost_est": "Amount",
                     "pay_disp": "Payment",
+                    "payment_method": "Method",
                 })
                 st.dataframe(
-                    disp_bill[["Ticket ID", "Customer", "Device", "Device Specs", "Repaired", "Amount", "Payment"]],
+                    disp_bill[["Ticket ID", "Customer", "Reported Issue", "Technician Work", "Amount", "Payment", "Method"]],
                     use_container_width=True,
                 )
 
@@ -906,59 +1049,59 @@ elif dept_idx == 2:
             )
             st.write(t["dev_info_line"].format(dtype=brow["device_type"], brand=brow["brand"], sn=brow["device_sn"]))
             st.write(t["specs_info_line"].format(specs=brow["device_specs"]))
-            st.write(t["cust_issue_box"].format(issue=brow["customer_issue"]))
-            st.write(t["repaired_box"].format(rep=brow["repaired_text"]))
-            st.write(f"**{brow['decision']}** | `{brow['cost_est']}` | `{brow['pay_disp']}`")
+            st.warning(t["cust_issue_box"].format(issue=brow["customer_issue"]))
+            st.success(t["repaired_box"].format(rep=brow["repaired_text"]))
+            st.write(f"**{brow['decision']}** | `{brow['cost_est']}` | `{brow['pay_disp']}` | `{brow['payment_method']}`")
 
-        c_cost, c_pay = st.columns(2)
+        c_cost, c_pay, c_meth = st.columns(3)
         with c_cost:
             new_cost = st.text_input(t["final_cost"], value=brow["cost_est"])
         with c_pay:
             pay_default_idx = 1 if brow["pay_code"] == "Paid" else 0
             new_pay_lbl = st.selectbox(t["pay_status"], t["pay_opts"], index=pay_default_idx)
             new_pay_db = "Paid" if new_pay_lbl == t["pay_opts"][1] else "Unpaid"
+        with c_meth:
+            meth_idx = 0
+            if brow["payment_method"] in t["pay_methods"]:
+                meth_idx = t["pay_methods"].index(brow["payment_method"])
+            new_method = st.selectbox(t["pay_method_lbl"], t["pay_methods"], index=meth_idx)
 
         move_stage_lbl = st.selectbox(t["move_stage"], t["bill_stage_choices"], index=0)
         stage_to_db = "Billing" if move_stage_lbl == t["bill_stage_choices"][0] else "Maintenance"
 
         if st.button(t["save_bill_btn"], type="primary"):
+            pay_hist = append_history(
+                brow.get("status_history", "[]"),
+                t["depts"][2],
+                f"حالة الدفع: {new_pay_lbl} ({new_method}) — المبلغ: {new_cost.strip()}"
+            )
             cursor.execute("""
                 UPDATE tickets
-                SET cost_est = ?, payment_status = ?, stage = ?
+                SET cost_est = ?, payment_status = ?, payment_method = ?, stage = ?, status_history = ?
                 WHERE ticket_id = ?
-            """, (new_cost.strip(), new_pay_db, stage_to_db, bill_id))
+            """, (new_cost.strip(), new_pay_db, new_method, stage_to_db, pay_hist, bill_id))
             conn.commit()
             st.session_state.current_ticket_id = bill_id
             if stage_to_db == "Maintenance":
                 st.session_state.active_dept_idx = 1
             st.rerun()
 
-        invoice_lines = [
-            "=== Service Invoice & Report ===",
-            f"Ticket / Invoice ID: {brow['ticket_id']}",
-            f"Date: {brow['ticket_date']}",
-            f"Customer: {brow['customer_name']}",
-            f"Receptionist: {brow['reception_staff']}",
-            f"Mobile: {brow['customer_phone']}",
-            f"Device: {brow['device_type']} - {brow['brand']} ({brow['device_sn']})",
-            f"Device Specs: {brow['device_specs']}",
-            f"Reported Issue: {brow['customer_issue']}",
-            f"Repaired (Written): {brow['repaired_text']}",
-            f"Decision: {brow['decision']}",
-            f"Amount: {new_cost}",
-            f"Payment Status: {new_pay_lbl}",
-            f"Stage: {move_stage_lbl}",
-            f"Notes: {brow['tech_notes']}",
-        ]
+        invoice_txt = build_billing_invoice(
+            brow.to_dict(),
+            move_stage_lbl,
+            new_pay_lbl,
+            new_method,
+            new_cost.strip(),
+        )
         st.download_button(
             label=t["dl_invoice"],
-            data="\n".join(invoice_lines),
-            file_name=f"Invoice_{brow['ticket_id']}.txt",
+            data=invoice_txt,
+            file_name=f"Final_Invoice_{brow['ticket_id']}.txt",
             mime="text/plain",
         )
 
         export_df = filtered_bill.drop(
-            columns=["stage_code", "pay_code", "stage_disp", "pay_disp"], errors="ignore"
+            columns=["stage_code", "pay_code", "stage_disp", "pay_disp", "status_history"], errors="ignore"
         )
         csv_bytes = export_df.to_csv(index=False).encode("utf-8-sig")
         st.download_button(
@@ -1064,12 +1207,18 @@ elif dept_idx == 3:
             ed_notes = st.text_area(t["mgr_notes_lbl"], value=erow["tech_notes"], key="ed_notes")
 
             if st.button(t["mgr_save_edit_btn"], type="primary"):
+                mgr_hist = append_history(
+                    erow.get("status_history", "[]"),
+                    t["depts"][3],
+                    f"تعديل إداري -> القسم: {ed_stage_lbl} | الدفع: {ed_pay_lbl}"
+                )
                 cursor.execute("""
                     UPDATE tickets
                     SET customer_name = ?, reception_staff = ?, customer_phone = ?,
                         device_sn = ?, device_specs = ?, customer_issue = ?,
                         repaired_text = ?, priority = ?, decision = ?, stage = ?,
-                        payment_status = ?, technician_name = ?, cost_est = ?, tech_notes = ?
+                        payment_status = ?, technician_name = ?, cost_est = ?,
+                        tech_notes = ?, status_history = ?
                     WHERE ticket_id = ?
                 """, (
                     ed_cust.strip(),
@@ -1086,6 +1235,7 @@ elif dept_idx == 3:
                     ed_tech.strip(),
                     ed_cost.strip(),
                     ed_notes.strip(),
+                    mgr_hist,
                     edit_tid,
                 ))
                 conn.commit()
@@ -1115,8 +1265,9 @@ elif dept_idx == 3:
                 new_mgr_tid = generate_unique_ticket_id()
                 add_stage_db = {"الاستقبال": "Reception", "الصيانة": "Maintenance", "الحساب": "Billing",
                                 "Reception": "Reception", "Maintenance": "Maintenance", "Billing": "Billing"}[add_stage_lbl]
+                new_hist = append_history("[]", t["depts"][3], f"إنشاء تذكرة من لوحة المدير في قسم {add_stage_lbl}")
                 cursor.execute("""
-                    INSERT INTO tickets VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    INSERT INTO tickets VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """, (
                     new_mgr_tid,
                     add_cust.strip(),
@@ -1129,13 +1280,15 @@ elif dept_idx == 3:
                     add_issue.strip(),
                     t["repaired_empty_msg"],
                     "Created from Manager dashboard.",
-                    "Medium",
+                    "متوسطة",
                     add_dec.strip(),
                     add_stage_db,
                     "Unpaid",
+                    "لم يُحدد بعد",
                     str(datetime.now().date()),
                     "فهد المطيري",
                     add_cost.strip(),
+                    new_hist,
                 ))
                 conn.commit()
                 st.session_state.current_ticket_id = new_mgr_tid
