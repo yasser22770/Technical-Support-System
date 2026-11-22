@@ -6,7 +6,7 @@ import streamlit as st
 
 MANAGER_PIN = "MGR-2026"
 
-conn = sqlite3.connect("enterprise_helpdesk_no_portal_v1.db", check_same_thread=False)
+conn = sqlite3.connect("enterprise_helpdesk_mgr_full_v1.db", check_same_thread=False)
 cursor = conn.cursor()
 
 cursor.execute("""
@@ -147,6 +147,7 @@ TEXTS = {
             "Maintenance": "الصيانة",
             "Billing": "الحساب",
         },
+        "stage_opts": ["الاستقبال", "الصيانة", "الحساب"],
         "pay_lbl": {
             "Unpaid": "غير مدفوع",
             "Paid": "مدفوع",
@@ -233,7 +234,7 @@ TEXTS = {
         "save_bill_btn": "💾 حفظ الفاتورة وتحديث حالة الدفع",
         "dl_invoice": "📥 تحميل الفاتورة (.txt)",
         "dl_csv_bill": "📊 تصدير فواتير الحساب (.csv)",
-        "mgr_title": "🔐 قسم المدير — دخول محمي برقم خاص",
+        "mgr_title": "🔐 قسم المدير — إدارة كاملة لجميع الأقسام",
         "mgr_warn": "هذا القسم مخصص للمدير ولا يُفتح إلا برقم الدخول الخاص. يمكن لمسؤول التوظيف الاطلاع على الرقم في تبويب «نبذة عن الموقع».",
         "pin_lbl": "أدخل رقم الدخول الخاص بالمدير:",
         "pin_ph": "مثال: MGR-2026",
@@ -241,7 +242,7 @@ TEXTS = {
         "pin_ok": "✅ تم التحقق من رقم الدخول بنجاح.",
         "pin_err": "❌ رقم الدخول غير صحيح. راجع «نبذة عن الموقع» لمعرفة رقم الدخول المخصص للتجربة.",
         "lock_btn": "🔒 قفل / خروج من قسم المدير",
-        "mgr_caption": "الإشراف العام، الإحصاءات، رصد تكرار الأجهزة، البحث والفلترة، وحذف أو مسح السجلات.",
+        "mgr_caption": "إشراف كامل وإدارة مباشرة لجميع أقسام النظام (الاستقبال، الصيانة، الحساب) والتذاكر والتقارير.",
         "m_total": "إجمالي التذاكر",
         "m_urgent": "تذاكر عاجلة",
         "m_work": "في الصيانة / الحساب",
@@ -250,11 +251,23 @@ TEXTS = {
         "rep_times": "مرات",
         "chart_stage": "#### 📈 توزيع التذاكر حسب القسم",
         "chart_dec": "#### 📈 توزيع التذاكر حسب القرار",
+        "mgr_add_sec": "#### ➕ إضافة تذكرة جديدة وتوجيهها لأي قسم مباشرة",
+        "mgr_target_stage": "القسم المبدئي للتذكرة",
+        "mgr_decision_lbl": "القرار / التشخيص",
+        "mgr_cost_lbl": "المبلغ / التكلفة",
+        "mgr_create_btn": "➕ إنشاء التذكرة في النظام",
+        "mgr_created_msg": "✅ تم إنشاء التذكرة `{tid}` في قسم `{stage}`.",
+        "mgr_edit_sec": "#### 🛠️ تعديل وتحكم كامل بأي تذكرة عبر الأقسام",
+        "mgr_pick_edit": "اختر التذكرة المراد إدارتها أو تعديلها:",
+        "mgr_stage_lbl": "تحويل التذكرة إلى القسم",
+        "mgr_notes_lbl": "الملاحظات والتقرير الفني",
+        "mgr_save_edit_btn": "💾 حفظ جميع التعديلات على التذكرة",
+        "mgr_saved_edit_msg": "✅ تم حفظ جميع تعديلات التذكرة `{tid}` وتحديث قسمها إلى `{stage}`.",
         "search_lbl": "🔎 بحث برقم التذكرة أو اسم العميل أو موظف الاستقبال أو رقم الجوال أو S/N",
         "filt_dept": "فلترة بالقسم",
         "filt_pay": "فلترة بالدفع",
         "all_opt": "الكل",
-        "pick_del": "اختر تذكرة للإدارة / الحذف:",
+        "pick_del": "اختر تذكرة للحذف:",
         "del_btn": "🗑️ حذف التذكرة المحددة",
         "del_msg": "تم حذف التذكرة `{tid}`.",
         "dl_csv_mgr": "📊 تصدير السجل الكامل (.csv)",
@@ -263,14 +276,14 @@ TEXTS = {
         "about_title": "📌 نبذة عن الموقع",
         "about_desc": (
             "نظام ويب متكامل لإدارة أعمال الدعم الفني وصيانة الجوالات والأجهزة اللوحية والحواسيب برقم تذكرة وفاتورة واحد ثابت: "
-            "الاستقبال ← الصيانة ← الحساب، مع تخصيص التذاكر لكل قسم وإشراف إداري مستقل في قسم المدير."
+            "الاستقبال ← الصيانة ← الحساب، مع إدارة كاملة لجميع الأقسام في لوحة المدير المحمية برقم دخول."
         ),
         "mgr_creds_title": "#### 🔑 بيانات دخول قسم المدير (لمسؤولي التوظيف والمستعرضين)",
         "mgr_pin_line": "**رقم الدخول الخاص بالمدير:** `{pin}`",
-        "mgr_pin_hint": "انتقل إلى تبويب «المدير» وأدخل الرقم أعلاه لتجربة لوحة الإدارة والإحصاءات.",
+        "mgr_pin_hint": "انتقل إلى تبويب «المدير» وأدخل الرقم أعلاه لتجربة الإدارة الكاملة لجميع الأقسام.",
         "feats_title": "#### ✨ أبرز مزايا النظام:",
         "feats": [
-            "- **مسار موحد:** تبدأ الفاتورة من الاستقبال وتنتقل للصيانة ثم الحساب برقم واحد ثابت.",
+            "- **إدارة كاملة في قسم المدير:** إنشاء تذاكر، تعديل أي تذكرة، وتحويلها بين الاستقبال والصيانة والحساب وتحديث الدفع.",
             "- **عزل التذاكر حسب القسم:** قسم الصيانة يعرض تذاكر الصيانة فقط، وقسم الحساب يعرض فواتير الحساب فقط.",
             "- **تصنيف ذكي وتقارير:** ربط أنواع الأجهزة بشركاتها الصحيحة، وحفظ SQLite وتصدير .txt و.csv.",
         ],
@@ -288,6 +301,7 @@ TEXTS = {
             "Maintenance": "Maintenance",
             "Billing": "Billing",
         },
+        "stage_opts": ["Reception", "Maintenance", "Billing"],
         "pay_lbl": {
             "Unpaid": "Unpaid",
             "Paid": "Paid",
@@ -374,7 +388,7 @@ TEXTS = {
         "save_bill_btn": "💾 Save Invoice & Payment",
         "dl_invoice": "📥 Download Invoice (.txt)",
         "dl_csv_bill": "📊 Export Billing Invoices (.csv)",
-        "mgr_title": "🔐 Manager — PIN Protected Access",
+        "mgr_title": "🔐 Manager — Full Management Across All Departments",
         "mgr_warn": "Restricted to Manager access. Recruiters can view the demo PIN under the «About» tab.",
         "pin_lbl": "Enter Manager Access PIN:",
         "pin_ph": "Example: MGR-2026",
@@ -382,7 +396,7 @@ TEXTS = {
         "pin_ok": "✅ PIN verified successfully.",
         "pin_err": "❌ Invalid PIN. Check «About» for the demo access PIN.",
         "lock_btn": "🔒 Lock / Exit Manager View",
-        "mgr_caption": "Oversight, analytics, repeated devices, search/filtering, and deleting or clearing records.",
+        "mgr_caption": "Full oversight and direct management across all departments (Reception, Maintenance, Billing), tickets, and reports.",
         "m_total": "Total Tickets",
         "m_urgent": "Urgent Tickets",
         "m_work": "Maintenance / Billing",
@@ -391,11 +405,23 @@ TEXTS = {
         "rep_times": "times",
         "chart_stage": "#### 📈 Tickets by Stage",
         "chart_dec": "#### 📈 Tickets by Decision",
+        "mgr_add_sec": "#### ➕ Create New Ticket & Route to Any Department",
+        "mgr_target_stage": "Initial Department",
+        "mgr_decision_lbl": "Decision / Diagnosis",
+        "mgr_cost_lbl": "Amount / Cost",
+        "mgr_create_btn": "➕ Create Ticket in System",
+        "mgr_created_msg": "✅ Created ticket `{tid}` in `{stage}`.",
+        "mgr_edit_sec": "#### 🛠️ Full Edit & Routing Control for Any Ticket",
+        "mgr_pick_edit": "Select ticket to manage or edit:",
+        "mgr_stage_lbl": "Route Ticket to Department",
+        "mgr_notes_lbl": "Notes & Technical Report",
+        "mgr_save_edit_btn": "💾 Save All Ticket Changes",
+        "mgr_saved_edit_msg": "✅ Saved all updates for ticket `{tid}` and routed to `{stage}`.",
         "search_lbl": "🔎 Search by Ticket ID, Customer, Receptionist, Mobile, or S/N",
         "filt_dept": "Filter by Stage",
         "filt_pay": "Filter by Payment",
         "all_opt": "All",
-        "pick_del": "Select ticket to manage / delete:",
+        "pick_del": "Select ticket to delete:",
         "del_btn": "🗑️ Delete Selected Ticket",
         "del_msg": "Deleted ticket `{tid}`.",
         "dl_csv_mgr": "📊 Export Full Log (.csv)",
@@ -404,16 +430,16 @@ TEXTS = {
         "about_title": "📌 About This App",
         "about_desc": (
             "A bilingual helpdesk & maintenance web app for smartphones, tablets, laptops, and desktops "
-            "tracking a single ticket & invoice ID across Reception -> Maintenance -> Billing, strictly scoping "
-            "each department's queue to its assigned tickets, with a PIN-protected Manager view."
+            "tracking a single ticket & invoice ID across Reception -> Maintenance -> Billing, with full "
+            "multi-department management inside a PIN-protected Manager view."
         ),
         "mgr_creds_title": "#### 🔑 Manager Access Credentials (For Recruiters & Reviewers)",
         "mgr_pin_line": "**Manager Access PIN:** `{pin}`",
-        "mgr_pin_hint": "Switch to the «Manager» tab and enter the PIN above to test the admin dashboard.",
+        "mgr_pin_hint": "Switch to the «Manager» tab and enter the PIN above to test full management across all departments.",
         "feats_title": "#### ✨ Key Features:",
         "feats": [
+            "- **Full Manager Control:** Create tickets, edit any ticket, route across Reception, Maintenance, and Billing, and update payment status.",
             "- **Department-Scoped Queues:** Maintenance only sees Maintenance tickets; Billing only sees Billing invoices.",
-            "- **Unified Flow:** Starts at Reception and moves to Maintenance then Billing with one fixed ID.",
             "- **Matched Brands & Exports:** Category-matched device brands, SQLite storage, and .txt / .csv exports.",
         ],
     },
@@ -1009,7 +1035,7 @@ elif dept_idx == 2:
         )
 
 # ==========================================
-# 3. المدير / Manager (محمي برقم دخول خاص)
+# 3. المدير / Manager (إدارة كاملة لجميع الأقسام)
 # ==========================================
 elif dept_idx == 3:
     st.subheader(t["mgr_title"])
@@ -1058,6 +1084,123 @@ elif dept_idx == 3:
             st.markdown(t["chart_dec"])
             st.bar_chart(df_all["decision"].value_counts())
 
+            # إدارة وتعديل كامل لأي تذكرة عبر جميع الأقسام
+            st.markdown("---")
+            st.markdown(t["mgr_edit_sec"])
+
+            mgr_all_ids = df_all["ticket_id"].tolist()
+            mgr_def_idx = 0
+            if st.session_state.current_ticket_id in mgr_all_ids:
+                mgr_def_idx = mgr_all_ids.index(st.session_state.current_ticket_id)
+
+            def fmt_mgr_ticket(tid):
+                r = df_all[df_all["ticket_id"] == tid].iloc[0]
+                return f"{r['ticket_id']} | {r['customer_name']} — {r['stage_disp']} ({r['pay_disp']})"
+
+            edit_tid = st.selectbox(t["mgr_pick_edit"], mgr_all_ids, index=mgr_def_idx, format_func=fmt_mgr_ticket)
+            st.session_state.current_ticket_id = edit_tid
+            erow = df_all[df_all["ticket_id"] == edit_tid].iloc[0]
+
+            ec1, ec2 = st.columns(2)
+            with ec1:
+                ed_cust = st.text_input(t["cust_name"], value=erow["customer_name"], key="ed_cust")
+                ed_phone = st.text_input(t["mobile"], value=erow["customer_phone"], key="ed_phone")
+                ed_sn = st.text_input(t["sn"], value=erow["device_sn"], key="ed_sn")
+            with ec2:
+                ed_staff = st.text_input(t["rec_staff"], value=erow["reception_staff"], key="ed_staff")
+                ed_tech = st.text_input(t["tech_lbl"], value=erow["technician_name"], key="ed_tech")
+                ed_prio = st.text_input(t["priority"], value=erow["priority"], key="ed_prio")
+
+            ec3, ec4, ec5 = st.columns(3)
+            with ec3:
+                stage_idx_now = {"Reception": 0, "Maintenance": 1, "Billing": 2}.get(erow["stage_code"], 0)
+                ed_stage_lbl = st.selectbox(t["mgr_stage_lbl"], t["stage_opts"], index=stage_idx_now, key="ed_stage")
+                ed_stage_db = {"الاستقبال": "Reception", "الصيانة": "Maintenance", "الحساب": "Billing",
+                               "Reception": "Reception", "Maintenance": "Maintenance", "Billing": "Billing"}[ed_stage_lbl]
+            with ec4:
+                ed_cost = st.text_input(t["mgr_cost_lbl"], value=erow["cost_est"], key="ed_cost")
+            with ec5:
+                pay_idx_now = 1 if erow["pay_code"] == "Paid" else 0
+                ed_pay_lbl = st.selectbox(t["pay_status"], t["pay_opts"], index=pay_idx_now, key="ed_pay")
+                ed_pay_db = "Paid" if ed_pay_lbl == t["pay_opts"][1] else "Unpaid"
+
+            ed_dec = st.text_input(t["mgr_decision_lbl"], value=erow["decision"], key="ed_dec")
+            ed_notes = st.text_area(t["mgr_notes_lbl"], value=erow["tech_notes"], key="ed_notes")
+
+            if st.button(t["mgr_save_edit_btn"], type="primary"):
+                cursor.execute("""
+                    UPDATE tickets
+                    SET customer_name = ?, reception_staff = ?, customer_phone = ?,
+                        device_sn = ?, priority = ?, decision = ?, stage = ?,
+                        payment_status = ?, technician_name = ?, cost_est = ?, tech_notes = ?
+                    WHERE ticket_id = ?
+                """, (
+                    ed_cust.strip(),
+                    ed_staff.strip(),
+                    ed_phone.strip(),
+                    ed_sn.strip(),
+                    ed_prio.strip(),
+                    ed_dec.strip(),
+                    ed_stage_db,
+                    ed_pay_db,
+                    ed_tech.strip(),
+                    ed_cost.strip(),
+                    ed_notes.strip(),
+                    edit_tid,
+                ))
+                conn.commit()
+                st.success(t["mgr_saved_edit_msg"].format(tid=edit_tid, stage=ed_stage_lbl))
+                st.rerun()
+
+            # إضافة تذكرة مباشرة من المدير وتوجيهها لأي قسم
+            st.markdown("---")
+            st.markdown(t["mgr_add_sec"])
+            ac1, ac2 = st.columns(2)
+            with ac1:
+                add_cust = st.text_input(t["cust_name"], "عميل جديد", key="add_cust")
+                add_phone = st.text_input(t["mobile"], "0500000000", key="add_phone")
+                add_sn = st.text_input(t["sn"], "SN-900100", key="add_sn")
+            with ac2:
+                add_staff = st.text_input(t["rec_staff"], "سالم الدوسري", key="add_staff")
+                add_stage_lbl = st.selectbox(t["mgr_target_stage"], t["stage_opts"], index=1, key="add_stage")
+                add_cost = st.text_input(t["mgr_cost_lbl"], "150 SAR", key="add_cost")
+
+            lang_brands_map = DEVICE_BRANDS[st.session_state.lang]
+            add_dtype = st.selectbox(t["dev_type"], list(lang_brands_map.keys()), key="add_dtype")
+            add_brand = st.selectbox(t["brand"], lang_brands_map[add_dtype], key="add_brand")
+            add_dec = st.text_input(t["mgr_decision_lbl"], "Inspection & Repair", key="add_dec")
+
+            if st.button(t["mgr_create_btn"]):
+                new_mgr_tid = generate_unique_ticket_id()
+                add_stage_db = {"الاستقبال": "Reception", "الصيانة": "Maintenance", "الحساب": "Billing",
+                                "Reception": "Reception", "Maintenance": "Maintenance", "Billing": "Billing"}[add_stage_lbl]
+                cursor.execute("""
+                    INSERT INTO tickets VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """, (
+                    new_mgr_tid,
+                    add_cust.strip(),
+                    add_staff.strip(),
+                    add_phone.strip(),
+                    add_sn.strip(),
+                    add_dtype,
+                    add_brand,
+                    "Managed by Manager",
+                    "Managed by Manager",
+                    "Created from Manager dashboard.",
+                    "Medium",
+                    add_dec.strip(),
+                    add_stage_db,
+                    "Unpaid",
+                    str(datetime.now().date()),
+                    "فهد المطيري",
+                    add_cost.strip(),
+                ))
+                conn.commit()
+                st.session_state.current_ticket_id = new_mgr_tid
+                st.success(t["mgr_created_msg"].format(tid=new_mgr_tid, stage=add_stage_lbl))
+                st.rerun()
+
+            st.markdown("---")
             search_q = st.text_input(t["search_lbl"])
             f1, f2 = st.columns(2)
             mgr_stage = f1.selectbox(t["filt_dept"], [t["all_opt"]] + sorted(df_all["stage_disp"].unique().tolist()))
