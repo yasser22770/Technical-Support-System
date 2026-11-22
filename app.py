@@ -25,6 +25,7 @@ cursor.execute("""
         decision TEXT,
         approval_status TEXT,
         repair_status TEXT,
+        completion_notice TEXT,
         stage TEXT,
         payment_status TEXT,
         ticket_date TEXT,
@@ -68,11 +69,13 @@ def normalize_approval(val):
 
 
 def normalize_repair(val):
-    if val in ["In Progress", "بدأت الصيانة", "جارية"]:
-        return "In Progress"
-    if val in ["Completed", "تم الانتهاء", "منتهية"]:
+    if val in ["In Repair", "قيد الصيانة"]:
+        return "In Repair"
+    if val in ["Completed", "منتهية", "تم الإنهاء"]:
         return "Completed"
-    return "Pending"
+    if val in ["Cancelled", "ملغاة"]:
+        return "Cancelled"
+    return "Pending Diagnosis"
 
 
 def is_mobile_or_tablet(dtype_str):
@@ -125,27 +128,27 @@ def load_demo_data():
         (
             "TK-40101", "ريما القحطاني", "سالم الدوسري", "0501122334", "SN-IP-77412",
             "جوال (Smartphone)", "Apple", "256 GB | iOS / iPadOS | 2 yrs",
-            "Battery", "Battery health at 71%; genuine battery replacement needed.",
-            "Medium", "Battery Replacement", "Approved", "Completed", "Billing", "Unpaid", "2026-11-18",
-            "فهد المطيري", "250 SAR"
+            "Battery", "Battery health degraded; replacement approved by customer.",
+            "Medium", "Battery Replacement", "Approved", "In Repair", "",
+            "Maintenance", "Unpaid", "2026-11-18", "فهد المطيري", "250 SAR"
         ),
         (
             "TK-40102", "عمر الزهراني", "سالم الدوسري", "0559988776", "SN-HP-61904",
             "لابتوب (Laptop)", "HP", "8 GB | SATA SSD | 2 yrs",
-            "Network/Wi-Fi, Driver/App", "Approved by customer; repair in progress.",
-            "Normal", "Software & Preventive", "Approved", "In Progress", "Maintenance", "Unpaid", "2026-11-19",
-            "فهد المطيري", "90 SAR"
+            "Network/Wi-Fi, Driver/App", "Inspected Wi-Fi adapter and OS services; requires driver & network fix.",
+            "Normal", "Software & Preventive", "Pending", "Pending Diagnosis", "",
+            "Maintenance", "Unpaid", "2026-11-19", "فهد المطيري", "90 SAR"
         ),
         (
             "TK-40103", "لينا الشهري", "سالم الدوسري", "0544433221", "SN-LN-48290",
             "كمبيوتر مكتبي (Desktop PC)", "Lenovo", "8 GB | HDD تقليدي | 8 yrs",
             "HDD Clicking, Boot Failure", "Mechanical drive failure on an 8-year-old desktop; replacement advised.",
-            "Urgent", "Device Replacement", "Pending", "Pending", "Maintenance", "Unpaid", "2026-11-20",
-            "فهد المطيري", "3,200 SAR"
+            "Urgent", "Device Replacement", "Pending", "Pending Diagnosis", "",
+            "Maintenance", "Unpaid", "2026-11-20", "فهد المطيري", "3,200 SAR"
         ),
     ]
     cursor.executemany(
-        "INSERT OR IGNORE INTO tickets VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        "INSERT OR IGNORE INTO tickets VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
         sample_tickets
     )
     conn.commit()
@@ -157,7 +160,7 @@ TEXTS = {
         "dir": "rtl",
         "align": "right",
         "banner_title": "🏢 نظام إدارة مركز الصيانة والدعم الفني",
-        "banner_sub": "الاستقبال ← الفحص ← اعتماد العميل ← بدء الصيانة ← إشعار الانتهاء ← الحساب",
+        "banner_sub": "الاستقبال ← الفحص ← اعتماد العميل ← بدء الصيانة ← إشعار الإنهاء ← الحساب",
         "nav_label": "انتقل بين الأقسام:",
         "depts": ["الاستقبال", "الصيانة", "متابعة العميل", "الحساب", "المدير", "نبذة عن الموقع"],
         "stage_lbl": {
@@ -175,13 +178,14 @@ TEXTS = {
             "Rejected": "مرفوض — استلام الجهاز",
         },
         "repair_lbl": {
-            "Pending": "لم تبدأ بعد",
-            "In Progress": "بدأت الصيانة",
-            "Completed": "تم الانتهاء من الصيانة",
+            "Pending Diagnosis": "بانتظار إرسال الفحص",
+            "In Repair": "قيد الصيانة الفعلية",
+            "Completed": "تم إنهاء الصيانة",
+            "Cancelled": "ملغاة لرفض التكلفة",
         },
         "active_ticket_bar": "**التذكرة النشطة:** `{tid}` | **العميل:** {cust} | **القسم:** `{stage}` | **الصيانة:** `{rep}`",
         "rec_title": "🛎️ قسم الاستقبال — تسجيل بيانات العميل وفتح التذكرة",
-        "rec_caption": "تبدأ التذكرة برقم واحد ثابت وتنتقل للصيانة ثم اعتماد العميل ثم بدء وإتمام الصيانة ثم الحساب.",
+        "rec_caption": "تبدأ التذكرة برقم ثابت وتنتقل للصيانة ثم اعتماد العميل ثم بدء الإصلاح وإشعار الإنهاء ثم الحساب.",
         "new_tid_msg": "**رقم التذكرة المخصص:** `{tid}`",
         "cust_name": "اسم العميل",
         "rec_staff": "اسم موظف الاستقبال",
@@ -201,12 +205,12 @@ TEXTS = {
         "reg_tickets": "📋 التذاكر المسجلة",
         "no_tickets": "لا توجد تذاكر مسجلة بعد.",
         "load_demo": "✨ تعبئة بيانات تجريبية للاختبار",
-        "maint_title": "🔧 قسم الصيانة — الفحص وتنفيذ الإصلاح وإشعار الانتهاء",
-        "maint_caption": "تظهر هنا التذاكر المخصصة للصيانة فقط. أرسل العطل والتكلفة للعميل، وبعد اعتماده تبدأ الصيانة ثم أرسل إشعار الانتهاء.",
+        "maint_title": "🔧 قسم الصيانة — الفحص، بدء الإصلاح بعد الاعتماد، وإشعار الإنهاء",
+        "maint_caption": "تظهر هنا التذاكر المخصصة للصيانة فقط.",
         "no_maint_tickets": "📭 لا توجد تذاكر مخصصة لقسم الصيانة حالياً.",
         "go_rec_btn": "🛎️ الذهاب لقسم الاستقبال",
         "pick_ticket_maint": "اختر التذكرة المخصصة للصيانة:",
-        "fixed_tid": "**رقم التذكرة:** `{tid}` | **الاعتماد:** `{appr}` | **حالة الصيانة:** `{rep}`",
+        "fixed_tid": "**رقم التذكرة:** `{tid}` | **القسم:** `{stage}` | **الاعتماد:** `{appr}` | **حالة الصيانة:** `{rep}`",
         "cust_info_line": "**العميل:** {cust} | **موظف الاستقبال:** {staff} | **رقم الجوال:** {phone}",
         "dev_info_line": "**الجهاز:** {dtype} — {brand} (`{sn}`)",
         "prev_notes": "**ملاحظات سابقة:** {notes}",
@@ -238,25 +242,24 @@ TEXTS = {
         "est_cost_lbl": "التكلفة التقديرية للإصلاح (ر.س)",
         "tech_lbl": "اسم فني الصيانة",
         "tech_notes_lbl": "تقرير العطل وسبب التكلفة للعميل:",
-        "save_diag_btn": "📤 حفظ الفحص وإرسال العطل والتكلفة للعميل",
+        "save_diag_btn": "📤 إرسال تقرير العطل والتكلفة للعميل",
         "sent_to_cust_msg": "✅ تم حفظ الفحص وإرسال رسالة العطل والتكلفة للتذكرة `{tid}` إلى العميل.",
-        "exec_sec": "#### 4️⃣ تنفيذ الصيانة وإشعار العميل عند الانتهاء",
-        "await_appr_warn": "⏳ بانتظار اعتماد العميل للعطل والتكلفة قبل بدء العمل الفعلي.",
-        "repair_started_info": "🛠️ العميل اعتمد التكلفة — الصيانة جارية الآن على الجهاز.",
-        "finish_note_lbl": "رسالة إشعار الانتهاء للعميل:",
-        "default_finish_note": "تم الانتهاء من صيانة جهازك بنجاح وهو جاهز.",
-        "finish_repair_btn": "🔔 إنهاء الصيانة وإرسال إشعار للعميل",
-        "move_bill_after_finish": "نقل التذكرة إلى قسم الحساب بعد إشعار الانتهاء",
-        "finished_notify_msg": "🔔 تم إنهاء الصيانة للتذكرة `{tid}` وإرسال إشعار للعميل بنجاح.",
+        "finish_sec": "#### 4️⃣ تنفيذ وإنهاء الصيانة المعتمدة",
+        "in_repair_banner": "🛠️ **الجهاز معتمد من العميل وقيد الصيانة الفعلية الآن.** عند الانتهاء من الإصلاح أرسل الإشعار للعميل.",
+        "finish_note_lbl": "رسالة / ملاحظة إتمام الصيانة للعميل:",
+        "finish_note_default": "تم إنهاء صيانة جهازك بنجاح وهو جاهز لاستكمال الفاتورة والاستلام.",
+        "finish_repair_btn": "🔔 إنهاء الصيانة وإرسال إشعار للعميل (نقل للحساب)",
+        "finished_msg": "✅ تم إنهاء الصيانة للتذكرة `{tid}` وإرسال إشعار للعميل ونقلها إلى قسم الحساب.",
+        "rejected_banner": "🛑 **رفض العميل التكلفة المحددة.** الجهاز بانتظار حضور العميل لاستلامه دون إجراء إصلاح.",
         "portal_title": "📱 بوابة متابعة العميل — الإشعارات والاعتماد",
-        "portal_caption": "أدخل اسمك ورقم الجوال المسجل لمتابعة حالة جهازك، اعتماد أو رفض التكلفة، واستلام إشعارات الصيانة.",
+        "portal_caption": "أدخل اسمك ورقم الجوال المسجل لمتابعة طلبك، اعتماد التكلفة أو رفضها، واستلام إشعار إنهاء الصيانة.",
         "portal_name_lbl": "اسم العميل",
         "portal_phone_lbl": "رقم الجوال",
         "portal_login_btn": "🔍 عرض طلباتي",
         "portal_logout_btn": "🚪 خروج من حساب العميل",
         "portal_not_found": "❌ لم يتم العثور على تذكرة مطابقة للاسم ورقم الجوال المدخلين.",
         "portal_pick_ticket": "اختر التذكرة:",
-        "msg_box_title": "📩 تفاصيل الجهاز وحالة الصيانة",
+        "msg_box_title": "📩 تفاصيل الفحص وحالة الصيانة",
         "msg_issue_lbl": "**العطل المحدد:** {issues}",
         "msg_dec_lbl": "**الإجراء المقترح:** {decision}",
         "msg_specs_lbl": "**المواصفات المفحوصة:** {specs}",
@@ -264,12 +267,12 @@ TEXTS = {
         "msg_tech_lbl": "**ملاحظات الفني:** {notes}",
         "approve_btn": "✅ اعتماد العطل والتكلفة وبدء الصيانة",
         "reject_btn": "❌ رفض التكلفة — سأحضر لاستلام جهازي",
-        "approved_start_msg": "✅ تم اعتماد التكلفة! بدأت الصيانة الآن على التذكرة `{tid}` وسيصلك إشعار فور الانتهاء.",
+        "approved_start_repair": "✅ تم اعتماد العطل والتكلفة! بدأت الصيانة الفعلية للتذكرة `{tid}` وسيصلك إشعار فور انتهائها.",
+        "in_repair_msg": "🛠️ **جاري العمل على صيانة جهازك الآن** بعد اعتمادك للتكلفة، وسنرسل لك إشعاراً فور انتهاء الصيانة.",
+        "completion_alert_title": "🔔 إشعار: تم إنهاء صيانة جهازك",
         "rejected_done": "🛑 تم تسجيل رفض التكلفة للتذكرة `{tid}`. يمكنك التوجه لمركز الصيانة لاستلام جهازك.",
-        "notify_completed_banner": "🔔 **إشعار جديد:** تم الانتهاء من صيانة جهازك للتذكرة `{tid}`! {notes}",
-        "notify_in_progress_banner": "🛠️ **إشعار الصيانة:** تم اعتماد طلبك وبدأت الصيانة على التذكرة `{tid}`.",
         "bill_title": "💳 قسم الحساب — الفواتير واعتماد الدفع",
-        "bill_caption": "تظهر هنا التذاكر المحوّلة إلى قسم الحساب فقط.",
+        "bill_caption": "تظهر هنا التذاكر التي أنهت الصيانة وانتقلت إلى قسم الحساب فقط.",
         "no_bill_tickets": "📭 لا توجد فواتير محوّلة إلى قسم الحساب حالياً.",
         "m_in_bill": "فواتير في الحساب",
         "m_paid": "فواتير مدفوعة",
@@ -294,10 +297,10 @@ TEXTS = {
         "pin_ok": "✅ تم التحقق من رقم الدخول بنجاح.",
         "pin_err": "❌ رقم الدخول غير صحيح. راجع «نبذة عن الموقع» لمعرفة رقم الدخول المخصص للتجربة.",
         "lock_btn": "🔒 قفل / خروج من قسم المدير",
-        "mgr_caption": "الإشراف العام، الإحصاءات، متابعة حالة الصيانة والاعتماد، البحث والفلترة، وحذف أو مسح السجلات.",
+        "mgr_caption": "الإشراف العام، الإحصاءات، متابعة حالات الصيانة والإشعارات، البحث والفلترة، وحذف أو مسح السجلات.",
         "m_total": "إجمالي التذاكر",
         "m_urgent": "تذاكر عاجلة",
-        "m_work": "في الصيانة / الحساب",
+        "m_work": "قيد الصيانة / الحساب",
         "m_paid_mgr": "مدفوع",
         "rep_sn": "🔁 **أجهزة ذات تذاكر متكررة:** ",
         "rep_times": "مرات",
@@ -315,18 +318,18 @@ TEXTS = {
         "clear_all": "🗑️ مسح جميع التذاكر",
         "about_title": "📌 نبذة عن الموقع",
         "about_desc": (
-            "نظام ويب متكامل لإدارة الصيانة والدعم الفني برقم تذكرة واحد ثابت: "
-            "الاستقبال ← الفحص ← اعتماد العميل ← بدء الصيانة ← إشعار الانتهاء للعميل ← الحساب، "
-            "مع بوابة متابعة للعميل بالاسم والجوال وقسم مدير محمي."
+            "نظام ويب متكامل لإدارة الصيانة والدعم الفني برقم تذكرة وفاتورة واحد ثابت: "
+            "الاستقبال ← الفحص ← اعتماد العميل ← بدء الصيانة ← إشعار إنهاء الصيانة ← الحساب "
+            "(أو استلام الجهاز عند الرفض)، مع بوابة متابعة للعميل بالاسم والجوال وقسم مدير محمي."
         ),
         "mgr_creds_title": "#### 🔑 بيانات دخول قسم المدير (لمسؤولي التوظيف والمستعرضين)",
         "mgr_pin_line": "**رقم الدخول الخاص بالمدير:** `{pin}`",
         "mgr_pin_hint": "انتقل إلى تبويب «المدير» وأدخل الرقم أعلاه لتجربة لوحة الإدارة والإحصاءات.",
         "feats_title": "#### ✨ أبرز مزايا النظام:",
         "feats": [
-            "- **بدء الصيانة بعد الاعتماد:** بمجرد اعتماد العميل تبدأ الصيانة على الجهاز فوراً.",
-            "- **إشعار عند الانتهاء:** عند إنهاء الصيانة يظهر إشعار للعميل في بوابته بأن الجهاز جاهز.",
-            "- **عزل الأقسام والتقارير:** كل قسم يرى ما يخصه، مع حفظ SQLite وتصدير .txt و.csv.",
+            "- **بدء الصيانة بعد الاعتماد:** إذا اعتمد العميل تبدأ الصيانة الفعلية فوراً، وإذا رفض يحضر لاستلام جهازه.",
+            "- **إشعار إنهاء الصيانة:** عند إنهاء الإصلاح يصل إشعار للعميل وتنتقل الفاتورة إلى قسم الحساب.",
+            "- **دخول العميل بالاسم والجوال:** يتابع العميل طلبه، يرد على العرض، ويقرأ إشعار الإنهاء بوضوح.",
         ],
     },
     "en": {
@@ -334,7 +337,7 @@ TEXTS = {
         "dir": "ltr",
         "align": "left",
         "banner_title": "🏢 IT Helpdesk & Maintenance System",
-        "banner_sub": "Reception → Inspection → Customer Approval → Repair Starts → Completion Notice → Billing",
+        "banner_sub": "Reception → Inspection → Customer Approval → Repair → Completion Notice → Billing",
         "nav_label": "Navigate departments:",
         "depts": ["Reception", "Maintenance", "Customer Portal", "Billing", "Manager", "About"],
         "stage_lbl": {
@@ -352,13 +355,14 @@ TEXTS = {
             "Rejected": "Rejected — Pickup Ready",
         },
         "repair_lbl": {
-            "Pending": "Not Started",
-            "In Progress": "Repair In Progress",
+            "Pending Diagnosis": "Pending Inspection",
+            "In Repair": "In Repair",
             "Completed": "Repair Completed",
+            "Cancelled": "Cancelled (Rejected)",
         },
         "active_ticket_bar": "**Active Ticket:** `{tid}` | **Customer:** {cust} | **Stage:** `{stage}` | **Repair:** `{rep}`",
         "rec_title": "🛎️ Reception — Customer Registration & Ticket Creation",
-        "rec_caption": "Starts a single ticket ID across Maintenance, Customer Approval, Repair Execution, and Billing.",
+        "rec_caption": "Starts a single ticket & invoice ID through inspection, approval, repair, completion notice, and billing.",
         "new_tid_msg": "**Ticket ID:** `{tid}`",
         "cust_name": "Customer Name",
         "rec_staff": "Receptionist Name",
@@ -379,11 +383,11 @@ TEXTS = {
         "no_tickets": "No tickets registered yet.",
         "load_demo": "✨ Load Demo Data",
         "maint_title": "🔧 Maintenance — Inspection, Repair Execution & Completion Notice",
-        "maint_caption": "Only Maintenance tickets appear here. Send fault & cost for approval; once approved, repair starts and notifies customer when done.",
+        "maint_caption": "Only Maintenance tickets appear here.",
         "no_maint_tickets": "📭 No tickets assigned to Maintenance right now.",
         "go_rec_btn": "🛎️ Go to Reception",
-        "pick_ticket_maint": "Select Maintenance ticket to inspect:",
-        "fixed_tid": "**Ticket ID:** `{tid}` | **Approval:** `{appr}` | **Repair Status:** `{rep}`",
+        "pick_ticket_maint": "Select Maintenance ticket:",
+        "fixed_tid": "**Ticket ID:** `{tid}` | **Stage:** `{stage}` | **Approval:** `{appr}` | **Repair:** `{rep}`",
         "cust_info_line": "**Customer:** {cust} | **Receptionist:** {staff} | **Mobile:** {phone}",
         "dev_info_line": "**Device:** {dtype} — {brand} (`{sn}`)",
         "prev_notes": "**Previous Notes:** {notes}",
@@ -415,25 +419,24 @@ TEXTS = {
         "est_cost_lbl": "Estimated Repair Cost (SAR)",
         "tech_lbl": "Technician Name",
         "tech_notes_lbl": "Fault Report & Cost Explanation for Customer:",
-        "save_diag_btn": "📤 Save Inspection & Send Fault/Cost to Customer",
-        "sent_to_cust_msg": "✅ Inspection saved and fault/cost message sent for ticket `{tid}`.",
-        "exec_sec": "#### 4️⃣ Repair Execution & Completion Notification",
-        "await_appr_warn": "⏳ Waiting for customer approval of fault & cost before starting repair.",
-        "repair_started_info": "🛠️ Customer approved the cost — repair is in progress.",
-        "finish_note_lbl": "Completion notification message for customer:",
-        "default_finish_note": "Your device repair is completed and ready.",
-        "finish_repair_btn": "🔔 Complete Repair & Notify Customer",
-        "move_bill_after_finish": "Forward ticket to Billing after sending completion notice",
-        "finished_notify_msg": "🔔 Repair completed for ticket `{tid}` and customer notified.",
-        "portal_title": "📱 Customer Portal — Notifications & Approval",
-        "portal_caption": "Sign in with your name and mobile number to approve or reject repair cost and receive repair notifications.",
+        "save_diag_btn": "📤 Send Fault & Cost Message to Customer",
+        "sent_to_cust_msg": "✅ Inspection saved and fault/cost message sent to customer for ticket `{tid}`.",
+        "finish_sec": "#### 4️⃣ Repair Execution & Completion Notification",
+        "in_repair_banner": "🛠️ **Customer approved — Repair is currently in progress.** Send completion notice once finished.",
+        "finish_note_lbl": "Completion notice message for customer:",
+        "finish_note_default": "Your device repair is completed and ready for billing and pickup.",
+        "finish_repair_btn": "🔔 Complete Repair & Notify Customer (Move to Billing)",
+        "finished_msg": "✅ Repair completed for ticket `{tid}`, customer notified, and moved to Billing.",
+        "rejected_banner": "🛑 **Customer rejected the repair cost.** Device awaits customer pickup without repair.",
+        "portal_title": "📱 Customer Portal — Notices & Approval",
+        "portal_caption": "Sign in with your name and mobile number to approve/reject quotes and receive repair completion notices.",
         "portal_name_lbl": "Customer Name",
         "portal_phone_lbl": "Mobile Number",
         "portal_login_btn": "🔍 View My Tickets",
         "portal_logout_btn": "🚪 Sign Out",
         "portal_not_found": "❌ No ticket found matching that name and mobile number.",
         "portal_pick_ticket": "Select ticket:",
-        "msg_box_title": "📩 Device Details & Repair Status",
+        "msg_box_title": "📩 Inspection & Repair Status",
         "msg_issue_lbl": "**Identified Fault:** {issues}",
         "msg_dec_lbl": "**Recommended Action:** {decision}",
         "msg_specs_lbl": "**Inspected Specs:** {specs}",
@@ -441,12 +444,12 @@ TEXTS = {
         "msg_tech_lbl": "**Technician Notes:** {notes}",
         "approve_btn": "✅ Approve Fault & Cost — Start Repair",
         "reject_btn": "❌ Reject Cost — I Will Pick Up My Device",
-        "approved_start_msg": "✅ Approved! Repair has started on ticket `{tid}` and you will be notified once finished.",
+        "approved_start_repair": "✅ Approved! Repair has started for ticket `{tid}` and you will be notified once completed.",
+        "in_repair_msg": "🛠️ **Your device is currently under repair** following your approval. A completion notice will appear here once finished.",
+        "completion_alert_title": "🔔 Notification: Your Device Repair Is Completed",
         "rejected_done": "🛑 Rejected for ticket `{tid}`. Please visit the service center to pick up your device.",
-        "notify_completed_banner": "🔔 **Completion Notification:** Repair is finished for ticket `{tid}`! {notes}",
-        "notify_in_progress_banner": "🛠️ **Repair Update:** Your request is approved and repair is in progress on ticket `{tid}`.",
         "bill_title": "💳 Billing — Invoices & Payment Status",
-        "bill_caption": "Only tickets transferred to Billing appear here.",
+        "bill_caption": "Only tickets that completed repair and moved to Billing appear here.",
         "no_bill_tickets": "📭 No invoices assigned to Billing right now.",
         "m_in_bill": "Billing Invoices",
         "m_paid": "Paid Invoices",
@@ -471,7 +474,7 @@ TEXTS = {
         "pin_ok": "✅ PIN verified successfully.",
         "pin_err": "❌ Invalid PIN. Check «About» for the demo access PIN.",
         "lock_btn": "🔒 Lock / Exit Manager View",
-        "mgr_caption": "Oversight, analytics, repair/approval status, search/filtering, and deleting or clearing records.",
+        "mgr_caption": "Oversight, analytics, repair & notification status, search/filtering, and deleting or clearing records.",
         "m_total": "Total Tickets",
         "m_urgent": "Urgent Tickets",
         "m_work": "Maintenance / Billing",
@@ -492,18 +495,18 @@ TEXTS = {
         "clear_all": "🗑️ Clear All Tickets",
         "about_title": "📌 About This App",
         "about_desc": (
-            "A bilingual helpdesk & maintenance web app with a single ticket ID across "
-            "Reception → Inspection → Customer Approval → Repair Starts → Completion Notification → Billing, "
-            "plus a customer portal by name & mobile and a PIN-protected Manager view."
+            "A bilingual helpdesk & maintenance web app with a single ticket & invoice ID across "
+            "Reception → Inspection → Customer Approval → Repair → Completion Notice → Billing "
+            "(or Device Pickup on rejection), plus a customer login portal by name & mobile and a PIN-protected Manager view."
         ),
         "mgr_creds_title": "#### 🔑 Manager Access Credentials (For Recruiters & Reviewers)",
         "mgr_pin_line": "**Manager Access PIN:** `{pin}`",
         "mgr_pin_hint": "Switch to the «Manager» tab and enter the PIN above to test the admin dashboard.",
         "feats_title": "#### ✨ Key Features:",
         "feats": [
-            "- **Repair Starts on Approval:** Once the customer approves, repair status moves to In Progress.",
-            "- **Completion Notification:** Finishing repair sends a clear completion notice to the customer portal.",
-            "- **Scoped Queues & Exports:** Each department sees only relevant tickets, with SQLite and .txt / .csv exports.",
+            "- **Repair Starts on Approval:** Approving starts repair immediately; rejecting prepares the device for pickup.",
+            "- **Completion Notice to Customer:** Finishing repair notifies the customer and routes the invoice to Billing.",
+            "- **Customer Portal by Name & Mobile:** Track tickets, approve/reject quotes, and view completion alerts.",
         ],
     },
 }
@@ -634,11 +637,11 @@ if not df_all.empty:
     df_all["stage_code"] = df_all["stage"].map(normalize_stage)
     df_all["pay_code"] = df_all["payment_status"].map(normalize_payment)
     df_all["appr_code"] = df_all["approval_status"].map(normalize_approval)
-    df_all["rep_code"] = df_all["repair_status"].map(normalize_repair)
+    df_all["repair_code"] = df_all["repair_status"].map(normalize_repair)
     df_all["stage_disp"] = df_all["stage_code"].map(t["stage_lbl"])
     df_all["pay_disp"] = df_all["pay_code"].map(t["pay_lbl"])
     df_all["appr_disp"] = df_all["appr_code"].map(t["appr_lbl"])
-    df_all["rep_disp"] = df_all["rep_code"].map(t["repair_lbl"])
+    df_all["repair_disp"] = df_all["repair_code"].map(t["repair_lbl"])
 
 if st.session_state.current_ticket_id and not df_all.empty:
     match_cur = df_all[df_all["ticket_id"] == st.session_state.current_ticket_id]
@@ -649,7 +652,7 @@ if st.session_state.current_ticket_id and not df_all.empty:
                 tid=cur_row["ticket_id"],
                 cust=cur_row["customer_name"],
                 stage=cur_row["stage_disp"],
-                rep=cur_row["rep_disp"],
+                rep=cur_row["repair_disp"],
             )
         )
 
@@ -698,7 +701,7 @@ if dept_idx == 0:
         notes_val = initial_note.strip() if initial_note.strip() else t["default_rec_note"]
 
         cursor.execute("""
-            INSERT OR REPLACE INTO tickets VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            INSERT OR REPLACE INTO tickets VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """, (
             active_new_id,
             customer_name.strip(),
@@ -713,7 +716,8 @@ if dept_idx == 0:
             priority_level,
             "Pending",
             "Pending",
-            "Pending",
+            "Pending Diagnosis",
+            "",
             next_stage,
             "Unpaid",
             str(ticket_date),
@@ -748,7 +752,7 @@ if dept_idx == 0:
                 "customer_phone": "رقم الجوال",
                 "device_type": "نوع الجهاز",
                 "stage_disp": "القسم",
-                "rep_disp": "حالة الصيانة",
+                "repair_disp": "حالة الصيانة",
             })
             st.dataframe(
                 disp_df[["رقم التذكرة", "اسم العميل", "موظف الاستقبال", "رقم الجوال", "نوع الجهاز", "القسم", "حالة الصيانة"]],
@@ -762,7 +766,7 @@ if dept_idx == 0:
                 "customer_phone": "Mobile",
                 "device_type": "Device",
                 "stage_disp": "Stage",
-                "rep_disp": "Repair Status",
+                "repair_disp": "Repair Status",
             })
             st.dataframe(
                 disp_df[["Ticket ID", "Customer", "Receptionist", "Mobile", "Device", "Stage", "Repair Status"]],
@@ -795,8 +799,564 @@ elif dept_idx == 1:
 
         def fmt_maint(tid):
             r = maint_df[maint_df["ticket_id"] == tid].iloc[0]
-            return f"{r['ticket_id']} | {r['customer_name']} ({r['rep_disp']})"
+            return f"{r['ticket_id']} | {r['customer_name']} ({r['repair_disp']})"
 
         chosen_id = st.selectbox(t["pick_ticket_maint"], ticket_ids, index=default_idx, format_func=fmt_maint)
         st.session_state.current_ticket_id = chosen_id
-        row = maint_df(maint_df)["ticket_id"] ==
+        row = maint_df[maint_df["ticket_id"] == chosen_id].iloc[0]
+
+        with st.container(border=True):
+            st.write(
+                t["fixed_tid"].format(
+                    tid=row["ticket_id"],
+                    stage=row["stage_disp"],
+                    appr=row["appr_disp"],
+                    rep=row["repair_disp"],
+                )
+            )
+            st.write(
+                t["cust_info_line"].format(
+                    cust=row["customer_name"],
+                    staff=row["reception_staff"],
+                    phone=row["customer_phone"],
+                )
+            )
+            st.write(t["dev_info_line"].format(dtype=row["device_type"], brand=row["brand"], sn=row["device_sn"]))
+            st.info(t["prev_notes"].format(notes=row["tech_notes"]))
+
+        if row["appr_code"] == "Rejected":
+            st.warning(t["rejected_banner"])
+        elif row["appr_code"] == "Approved":
+            st.success(t["in_repair_banner"])
+            st.markdown(t["finish_sec"])
+            finish_msg_in = st.text_area(t["finish_note_lbl"], value=t["finish_note_default"])
+            if st.button(t["finish_repair_btn"], type="primary"):
+                now_str = datetime.now().strftime("%Y-%m-%d %H:%M")
+                notice_full = f"[{now_str}] {finish_msg_in.strip()}"
+                cursor.execute("""
+                    UPDATE tickets
+                    SET repair_status = 'Completed',
+                        completion_notice = ?,
+                        stage = 'Billing'
+                    WHERE ticket_id = ?
+                """, (notice_full, chosen_id))
+                conn.commit()
+                st.success(t["finished_msg"].format(tid=chosen_id))
+                st.session_state.active_dept_idx = 3
+                st.rerun()
+
+        st.markdown("---")
+        mobile_mode = is_mobile_or_tablet(row["device_type"])
+
+        st.markdown(t["specs_sec"])
+        device_age = st.slider(t["age_lbl"], 0, 15, 2)
+        c_r, c_s = st.columns(2)
+        if mobile_mode:
+            with c_r:
+                spec_a = st.selectbox(t["cap_lbl_mob"], t["cap_opts_mob"], index=2)
+            with c_s:
+                spec_b = st.selectbox(t["os_lbl_mob"], t["os_opts_mob"])
+        else:
+            with c_r:
+                spec_a = st.selectbox(t["ram_lbl"], ["4 GB", "8 GB", "16 GB", "32 GB", "64 GB"], index=1)
+            with c_s:
+                spec_b = st.selectbox(t["stor_lbl"], t["stor_opts_pc"])
+
+        st.markdown(t["issues_sec"])
+        tab1, tab2, tab3 = st.tabs(t["tabs"])
+        if mobile_mode:
+            with tab1:
+                m_scr = st.checkbox(t["m_screen"])
+                m_bat = st.checkbox(t["m_batt"])
+                m_prt = st.checkbox(t["m_port"])
+                m_cam = st.checkbox(t["m_cam"])
+            with tab2:
+                c_slow = st.checkbox(t["c_slow"])
+                c_boot = st.checkbox(t["c_boot"])
+                c_corrupt = st.checkbox(t["c_corrupt"])
+            with tab3:
+                c_net = st.checkbox(t["c_net"])
+                c_domain = st.checkbox(t["c_domain"])
+        else:
+            with tab1:
+                c_slow = st.checkbox(t["c_slow"])
+                c_heat = st.checkbox(t["c_heat"])
+                c_bsod = st.checkbox(t["c_bsod"])
+                c_noise = st.checkbox(t["c_noise"])
+            with tab2:
+                c_boot = st.checkbox(t["c_boot"])
+                c_virus = st.checkbox(t["c_virus"])
+                c_corrupt = st.checkbox(t["c_corrupt"])
+            with tab3:
+                c_net = st.checkbox(t["c_net"])
+                c_domain = st.checkbox(t["c_domain"])
+
+        selected_issues = []
+        if mobile_mode:
+            if m_scr:
+                selected_issues.append("Screen/Touch")
+            if m_bat:
+                selected_issues.append("Battery")
+            if m_prt:
+                selected_issues.append("Charging Port/Speaker")
+            if m_cam:
+                selected_issues.append("Camera/Buttons")
+            if c_slow:
+                selected_issues.append("Slow/Freeze")
+            if c_boot:
+                selected_issues.append("Boot/Logo Stuck")
+            if c_corrupt:
+                selected_issues.append("OS/App Issue")
+            if c_net:
+                selected_issues.append("Wi-Fi")
+            if c_domain:
+                selected_issues.append("SIM/Bluetooth")
+
+            decision = "Software & Preventive"
+            suggested_cost = "80 SAR"
+            if m_scr:
+                decision = "Screen Replacement"
+                suggested_cost = "450 SAR"
+            elif m_bat:
+                decision = "Battery Replacement"
+                suggested_cost = "220 SAR"
+            elif m_prt or m_cam:
+                decision = "Hardware Part Replacement"
+                suggested_cost = "180 SAR"
+        else:
+            if c_slow:
+                selected_issues.append("Slow/Freeze")
+            if c_heat:
+                selected_issues.append("Heat/Fan")
+            if c_bsod:
+                selected_issues.append("BSOD")
+            if c_noise:
+                selected_issues.append("HDD Clicking")
+            if c_boot:
+                selected_issues.append("Boot Failure")
+            if c_virus:
+                selected_issues.append("Malware")
+            if c_corrupt:
+                selected_issues.append("Driver/App")
+            if c_net:
+                selected_issues.append("Network/Wi-Fi")
+            if c_domain:
+                selected_issues.append("Domain/LAN")
+
+            decision = "Software & Preventive"
+            suggested_cost = "90 SAR"
+            if c_noise or (device_age >= 8 and c_boot):
+                decision = "Device Replacement"
+                suggested_cost = "3,200 SAR"
+            elif "HDD" in spec_b and (c_slow or c_boot):
+                decision = "SSD Upgrade"
+                suggested_cost = "280 SAR"
+            elif "4 GB" in spec_a and c_slow:
+                decision = "RAM Upgrade"
+                suggested_cost = "180 SAR"
+            elif c_heat:
+                decision = "Thermal & Mechanical Service"
+                suggested_cost = "120 SAR"
+
+        st.markdown(t["cost_sec"])
+        default_cost_val = suggested_cost if (not row["cost_est"] or row["cost_est"] == "0 SAR") else row["cost_est"]
+        est_cost_input = st.text_input(t["est_cost_lbl"], value=default_cost_val)
+        tech_person = st.text_input(t["tech_lbl"], value=row["technician_name"] if row["technician_name"] else "فهد المطيري")
+        tech_notes = st.text_area(t["tech_notes_lbl"], value=row["tech_notes"])
+
+        if st.button(t["save_diag_btn"]):
+            issues_text = ", ".join(selected_issues) if selected_issues else "No specific issues"
+            specs_text = f"{spec_a} | {spec_b} | {device_age} yrs"
+
+            cursor.execute("""
+                UPDATE tickets
+                SET specs_summary = ?, issues_summary = ?, tech_notes = ?,
+                    decision = ?, approval_status = 'Pending', repair_status = 'Pending Diagnosis',
+                    completion_notice = '', stage = 'Maintenance',
+                    technician_name = ?, cost_est = ?
+                WHERE ticket_id = ?
+            """, (
+                specs_text,
+                issues_text,
+                tech_notes.strip(),
+                decision,
+                tech_person.strip(),
+                est_cost_input.strip(),
+                chosen_id,
+            ))
+            conn.commit()
+            st.session_state.current_ticket_id = chosen_id
+            st.success(t["sent_to_cust_msg"].format(tid=chosen_id))
+            st.rerun()
+
+# ==========================================
+# 2. بوابة متابعة العميل / Customer Portal
+# ==========================================
+elif dept_idx == 2:
+    st.subheader(t["portal_title"])
+    st.caption(t["portal_caption"])
+
+    if st.session_state.customer_auth is None:
+        c_n, c_p = st.columns(2)
+        with c_n:
+            in_cname = st.text_input(t["portal_name_lbl"], placeholder="ريما القحطاني")
+        with c_p:
+            in_cphone = st.text_input(t["portal_phone_lbl"], placeholder="0501122334")
+
+        if st.button(t["portal_login_btn"], type="primary"):
+            clean_n = in_cname.strip()
+            clean_p = in_cphone.strip()
+            if df_all.empty:
+                st.error(t["portal_not_found"])
+            else:
+                matched = df_all[
+                    (df_all["customer_name"].str.strip().str.lower() == clean_n.lower())
+                    & (df_all["customer_phone"].str.strip() == clean_p)
+                ]
+                if matched.empty:
+                    st.error(t["portal_not_found"])
+                else:
+                    st.session_state.customer_auth = (clean_n, clean_p)
+                    st.rerun()
+    else:
+        auth_name, auth_phone = st.session_state.customer_auth
+        cust_tickets = df_all[
+            (df_all["customer_name"].str.strip().str.lower() == auth_name.lower())
+            & (df_all["customer_phone"].str.strip() == auth_phone)
+        ] if not df_all.empty else pd.DataFrame()
+
+        if st.button(t["portal_logout_btn"]):
+            st.session_state.customer_auth = None
+            st.rerun()
+
+        if cust_tickets.empty:
+            st.error(t["portal_not_found"])
+        else:
+            c_tids = cust_tickets["ticket_id"].tolist()
+            sel_tid = st.selectbox(
+                t["portal_pick_ticket"],
+                c_tids,
+                format_func=lambda tid: f"{tid} — {cust_tickets[cust_tickets['ticket_id'] == tid].iloc[0]['device_type']} ({cust_tickets[cust_tickets['ticket_id'] == tid].iloc[0]['repair_disp']})",
+            )
+            st.session_state.current_ticket_id = sel_tid
+            crow = cust_tickets[cust_tickets["ticket_id"] == sel_tid].iloc[0]
+
+            if crow["repair_code"] == "Completed" or crow["completion_notice"]:
+                st.success(f"### {t['completion_alert_title']}\n{crow['completion_notice']}")
+            elif crow["repair_code"] == "In Repair":
+                st.info(t["in_repair_msg"])
+
+            with st.container(border=True):
+                st.markdown(f"#### {t['msg_box_title']}")
+                st.write(
+                    t["fixed_tid"].format(
+                        tid=crow["ticket_id"],
+                        stage=crow["stage_disp"],
+                        appr=crow["appr_disp"],
+                        rep=crow["repair_disp"],
+                    )
+                )
+                st.write(t["dev_info_line"].format(dtype=crow["device_type"], brand=crow["brand"], sn=crow["device_sn"]))
+                st.write(t["msg_specs_lbl"].format(specs=crow["specs_summary"]))
+                st.write(t["msg_issue_lbl"].format(issues=crow["issues_summary"]))
+                st.write(t["msg_dec_lbl"].format(decision=crow["decision"]))
+                st.write(t["msg_cost_lbl"].format(cost=crow["cost_est"]))
+                st.info(t["msg_tech_lbl"].format(notes=crow["tech_notes"]))
+
+            if crow["appr_code"] == "Pending":
+                b_col1, b_col2 = st.columns(2)
+                with b_col1:
+                    if st.button(t["approve_btn"], type="primary"):
+                        cursor.execute("""
+                            UPDATE tickets
+                            SET approval_status = 'Approved',
+                                repair_status = 'In Repair',
+                                stage = 'Maintenance'
+                            WHERE ticket_id = ?
+                        """, (sel_tid,))
+                        conn.commit()
+                        st.success(t["approved_start_repair"].format(tid=sel_tid))
+                        st.rerun()
+                with b_col2:
+                    if st.button(t["reject_btn"]):
+                        cursor.execute("""
+                            UPDATE tickets
+                            SET approval_status = 'Rejected',
+                                repair_status = 'Cancelled',
+                                stage = 'Maintenance'
+                            WHERE ticket_id = ?
+                        """, (sel_tid,))
+                        conn.commit()
+                        st.warning(t["rejected_done"].format(tid=sel_tid))
+                        st.rerun()
+            elif crow["appr_code"] == "Rejected":
+                st.warning(t["rejected_done"].format(tid=sel_tid))
+
+# ==========================================
+# 3. الحساب / Billing (تذاكر الحساب فقط)
+# ==========================================
+elif dept_idx == 3:
+    st.subheader(t["bill_title"])
+    st.caption(t["bill_caption"])
+
+    billing_pool = df_all[df_all["stage_code"] == "Billing"].copy() if not df_all.empty else pd.DataFrame()
+
+    if billing_pool.empty:
+        st.info(t["no_bill_tickets"])
+        if df_all.empty and st.button(t["load_demo"], type="primary"):
+            load_demo_data()
+            st.rerun()
+    else:
+        m1, m2, m3 = st.columns(3)
+        m1.metric(t["m_in_bill"], len(billing_pool))
+        m2.metric(t["m_paid"], len(billing_pool[billing_pool["pay_code"] == "Paid"]))
+        m3.metric(t["m_unpaid"], len(billing_pool[billing_pool["pay_code"] == "Unpaid"]))
+
+        pay_filter_sel = st.selectbox(t["filter_pay_lbl"], t["pay_filter_opts"])
+
+        filtered_bill = billing_pool.copy()
+        if pay_filter_sel == t["pay_filter_opts"][1]:
+            filtered_bill = filtered_bill[filtered_bill["pay_code"] == "Unpaid"]
+        elif pay_filter_sel == t["pay_filter_opts"][2]:
+            filtered_bill = filtered_bill[filtered_bill["pay_code"] == "Paid"]
+
+        st.markdown(t["bill_table_title"])
+        if filtered_bill.empty:
+            st.info(t["no_matching_bills"])
+        else:
+            if st.session_state.lang == "ar":
+                disp_bill = filtered_bill.rename(columns={
+                    "ticket_id": "رقم التذكرة",
+                    "customer_name": "اسم العميل",
+                    "device_type": "الجهاز",
+                    "repair_disp": "حالة الصيانة",
+                    "cost_est": "المبلغ",
+                    "pay_disp": "حالة الدفع",
+                })
+                st.dataframe(
+                    disp_bill[["رقم التذكرة", "اسم العميل", "الجهاز", "حالة الصيانة", "المبلغ", "حالة الدفع"]],
+                    use_container_width=True,
+                )
+            else:
+                disp_bill = filtered_bill.rename(columns={
+                    "ticket_id": "Ticket ID",
+                    "customer_name": "Customer",
+                    "device_type": "Device",
+                    "repair_disp": "Repair Status",
+                    "cost_est": "Amount",
+                    "pay_disp": "Payment",
+                })
+                st.dataframe(
+                    disp_bill[["Ticket ID", "Customer", "Device", "Repair Status", "Amount", "Payment"]],
+                    use_container_width=True,
+                )
+
+        bill_ids = billing_pool["ticket_id"].tolist()
+        bill_default = 0
+        if st.session_state.current_ticket_id in bill_ids:
+            bill_default = bill_ids.index(st.session_state.current_ticket_id)
+
+        st.markdown(t["bill_mgmt"])
+
+        def fmt_bill(tid):
+            r = billing_pool[billing_pool["ticket_id"] == tid].iloc[0]
+            return f"{r['ticket_id']} | {r['customer_name']} ({r['pay_disp']})"
+
+        bill_id = st.selectbox(t["pick_ticket_bill"], bill_ids, index=bill_default, format_func=fmt_bill)
+        st.session_state.current_ticket_id = bill_id
+        brow = billing_pool[billing_pool["ticket_id"] == bill_id].iloc[0]
+
+        with st.container(border=True):
+            st.write(
+                t["fixed_tid"].format(
+                    tid=brow["ticket_id"],
+                    stage=brow["stage_disp"],
+                    appr=brow["appr_disp"],
+                    rep=brow["repair_disp"],
+                )
+            )
+            st.write(
+                t["cust_info_line"].format(
+                    cust=brow["customer_name"],
+                    staff=brow["reception_staff"],
+                    phone=brow["customer_phone"],
+                )
+            )
+            st.write(t["dev_info_line"].format(dtype=brow["device_type"], brand=brow["brand"], sn=brow["device_sn"]))
+            st.write(f"**{brow['decision']}** | `{brow['cost_est']}` | `{brow['pay_disp']}`")
+
+        c_cost, c_pay = st.columns(2)
+        with c_cost:
+            new_cost = st.text_input(t["final_cost"], value=brow["cost_est"])
+        with c_pay:
+            pay_default_idx = 1 if brow["pay_code"] == "Paid" else 0
+            new_pay_lbl = st.selectbox(t["pay_status"], t["pay_opts"], index=pay_default_idx)
+            new_pay_db = "Paid" if new_pay_lbl == t["pay_opts"][1] else "Unpaid"
+
+        if st.button(t["save_bill_btn"], type="primary"):
+            cursor.execute("""
+                UPDATE tickets
+                SET cost_est = ?, payment_status = ?
+                WHERE ticket_id = ?
+            """, (new_cost.strip(), new_pay_db, bill_id))
+            conn.commit()
+            st.session_state.current_ticket_id = bill_id
+            st.rerun()
+
+        invoice_lines = [
+            "=== Service Invoice & Report ===",
+            f"Ticket / Invoice ID: {brow['ticket_id']}",
+            f"Date: {brow['ticket_date']}",
+            f"Customer: {brow['customer_name']}",
+            f"Mobile: {brow['customer_phone']}",
+            f"Device: {brow['device_type']} - {brow['brand']} ({brow['device_sn']})",
+            f"Faults: {brow['issues_summary']}",
+            f"Decision: {brow['decision']}",
+            f"Repair Status: {brow['repair_disp']}",
+            f"Completion Notice: {brow['completion_notice']}",
+            f"Amount: {new_cost}",
+            f"Payment Status: {new_pay_lbl}",
+            f"Notes: {brow['tech_notes']}",
+        ]
+        st.download_button(
+            label=t["dl_invoice"],
+            data="\n".join(invoice_lines),
+            file_name=f"Invoice_{brow['ticket_id']}.txt",
+            mime="text/plain",
+        )
+
+        export_df = filtered_bill.drop(
+            columns=["stage_code", "pay_code", "appr_code", "repair_code", "stage_disp", "pay_disp", "appr_disp", "repair_disp"],
+            errors="ignore",
+        )
+        csv_bytes = export_df.to_csv(index=False).encode("utf-8-sig")
+        st.download_button(
+            label=t["dl_csv_bill"],
+            data=csv_bytes,
+            file_name="billing_invoices.csv",
+            mime="text/csv",
+        )
+
+# ==========================================
+# 4. المدير / Manager (محمي برقم دخول خاص)
+# ==========================================
+elif dept_idx == 4:
+    st.subheader(t["mgr_title"])
+
+    if not st.session_state.manager_unlocked:
+        st.warning(t["mgr_warn"])
+        entered_pin = st.text_input(t["pin_lbl"], type="password", placeholder=t["pin_ph"])
+        if st.button(t["unlock_btn"], type="primary"):
+            if entered_pin.strip() == MANAGER_PIN:
+                st.session_state.manager_unlocked = True
+                st.success(t["pin_ok"])
+                st.rerun()
+            else:
+                st.error(t["pin_err"])
+    else:
+        if st.button(t["lock_btn"]):
+            st.session_state.manager_unlocked = False
+            st.rerun()
+
+        st.markdown("---")
+        st.caption(t["mgr_caption"])
+
+        if df_all.empty:
+            st.info(t["no_tickets"])
+            if st.button(t["load_demo"], type="primary"):
+                load_demo_data()
+                st.rerun()
+        else:
+            m1, m2 = st.columns(2)
+            m1.metric(t["m_total"], len(df_all))
+            m2.metric(t["m_urgent"], len(df_all[df_all["priority"].isin(["Urgent", "عاجلة"])]))
+
+            m3, m4 = st.columns(2)
+            m3.metric(t["m_work"], len(df_all[df_all["stage_code"].isin(["Maintenance", "Billing"])]))
+            m4.metric(t["m_paid_mgr"], len(df_all[df_all["pay_code"] == "Paid"]))
+
+            repeated_sn = df_all["device_sn"].value_counts()
+            repeated_sn = repeated_sn[repeated_sn > 1]
+            if not repeated_sn.empty:
+                items_txt = ", ".join([f"{sn} ({cnt} {t['rep_times']})" for sn, cnt in repeated_sn.items()])
+                st.warning(t["rep_sn"] + items_txt)
+
+            st.markdown(t["chart_stage"])
+            st.bar_chart(df_all["stage_disp"].value_counts())
+
+            st.markdown(t["chart_dec"])
+            st.bar_chart(df_all["decision"].value_counts())
+
+            search_q = st.text_input(t["search_lbl"])
+            f1, f2 = st.columns(2)
+            mgr_stage = f1.selectbox(t["filt_dept"], [t["all_opt"]] + sorted(df_all["stage_disp"].unique().tolist()))
+            mgr_pay = f2.selectbox(t["filt_pay"], [t["all_opt"]] + sorted(df_all["pay_disp"].unique().tolist()))
+
+            mgr_df = df_all.copy()
+            if search_q:
+                mask = (
+                    mgr_df["ticket_id"].str.contains(search_q, case=False, na=False)
+                    | mgr_df["customer_name"].str.contains(search_q, case=False, na=False)
+                    | mgr_df["reception_staff"].str.contains(search_q, case=False, na=False)
+                    | mgr_df["customer_phone"].str.contains(search_q, case=False, na=False)
+                    | mgr_df["device_sn"].str.contains(search_q, case=False, na=False)
+                )
+                mgr_df = mgr_df[mask]
+            if mgr_stage != t["all_opt"]:
+                mgr_df = mgr_df[mgr_df["stage_disp"] == mgr_stage]
+            if mgr_pay != t["all_opt"]:
+                mgr_df = mgr_df[mgr_df["pay_disp"] == mgr_pay]
+
+            st.dataframe(
+                mgr_df.drop(
+                    columns=["stage_code", "pay_code", "appr_code", "repair_code", "stage_disp", "pay_disp", "appr_disp", "repair_disp"],
+                    errors="ignore",
+                ),
+                use_container_width=True,
+            )
+
+            mgr_labels = [f"{r['ticket_id']} | {r['customer_name']} ({r['repair_disp']})" for _, r in df_all.iterrows()]
+            del_choice = st.selectbox(t["pick_del"], mgr_labels)
+            del_id = del_choice.split(" | ")[0].strip()
+
+            if st.button(t["del_btn"]):
+                cursor.execute("DELETE FROM tickets WHERE ticket_id = ?", (del_id,))
+                conn.commit()
+                st.warning(t["del_msg"].format(tid=del_id))
+                st.rerun()
+
+            csv_mgr = mgr_df.drop(
+                columns=["stage_code", "pay_code", "appr_code", "repair_code", "stage_disp", "pay_disp", "appr_disp", "repair_disp"],
+                errors="ignore",
+            ).to_csv(index=False).encode("utf-8-sig")
+            st.download_button(
+                label=t["dl_csv_mgr"],
+                data=csv_mgr,
+                file_name="manager_tickets_report.csv",
+                mime="text/csv",
+            )
+
+            if st.button(t["add_demo"]):
+                load_demo_data()
+                st.rerun()
+
+            if st.button(t["clear_all"]):
+                cursor.execute("DELETE FROM tickets")
+                conn.commit()
+                st.rerun()
+
+# ==========================================
+# 5. نبذة عن الموقع / About
+# ==========================================
+else:
+    st.subheader(t["about_title"])
+    st.write(t["about_desc"])
+
+    with st.container(border=True):
+        st.markdown(t["mgr_creds_title"])
+        st.write(t["mgr_pin_line"].format(pin=MANAGER_PIN))
+        st.caption(t["mgr_pin_hint"])
+
+    st.markdown(t["feats_title"])
+    for item in t["feats"]:
+        st.markdown(item)
