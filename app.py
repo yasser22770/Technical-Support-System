@@ -9,7 +9,15 @@ import streamlit.components.v1 as components
 
 MANAGER_PIN = "MGR-2026"
 
-conn = sqlite3.connect("enterprise_helpdesk_blue_card_only_v1.db", check_same_thread=False)
+TECH_OPTIONS = [
+    "فهد المطيري",
+    "خالد الشمري",
+    "عبدالله الحربي",
+    "مشاري العتيبي",
+    "فني آخر (اكتب الاسم)",
+]
+
+conn = sqlite3.connect("enterprise_helpdesk_tech_fix_v1.db", check_same_thread=False)
 cursor = conn.cursor()
 
 cursor.execute("""
@@ -158,21 +166,21 @@ def render_unified_document_card(
         f'<div style="display:flex;justify-content:space-between;align-items:center;border-bottom:2px solid #e2e8f0;padding-bottom:10px;margin-bottom:12px;gap:8px;flex-wrap:wrap;">'
         f'<div>'
         f'<div style="font-size:17px;font-weight:700;color:#0f294a;">{e(doc_title)}</div>'
-        f'<div style="font-size:12px;color:#64748b;margin-top:2px;">رقم التذكرة: <strong>{e(str(row_dict["ticket_id"]))}</strong> | التاريخ: <strong>{e(str(row_dict["ticket_date"]))}</strong></div>'
+        f'<div style="font-size:12px;color:#64748b;margin-top:2px;">رقم التذكرة: <strong>{e(str(row_dict.get("ticket_id", "-")))}</strong> | التاريخ: <strong>{e(str(row_dict.get("ticket_date", "-")))}</strong></div>'
         f'</div>'
         f'<span style="background:{badge_bg};color:{badge_fg};padding:5px 12px;border-radius:999px;font-weight:700;font-size:12px;">{e(badge_text)}</span>'
         f'</div>'
         f'<div style="display:grid;grid-template-columns:repeat(2,minmax(140px,1fr));gap:8px;background:#f8fafc;border:1px solid #e2e8f0;padding:10px;border-radius:10px;margin-bottom:12px;font-size:12.5px;">'
-        f'<div><span style="color:#64748b;display:block;font-size:11px;">العميل / Customer</span><strong>{e(str(row_dict["customer_name"]))}</strong></div>'
-        f'<div><span style="color:#64748b;display:block;font-size:11px;">الجوال / Mobile</span><strong>{e(str(row_dict["customer_phone"]))}</strong></div>'
+        f'<div><span style="color:#64748b;display:block;font-size:11px;">العميل / Customer</span><strong>{e(str(row_dict.get("customer_name", "-")))}</strong></div>'
+        f'<div><span style="color:#64748b;display:block;font-size:11px;">الجوال / Mobile</span><strong>{e(str(row_dict.get("customer_phone", "-")))}</strong></div>'
         f'{third_cell}'
-        f'<div><span style="color:#64748b;display:block;font-size:11px;">الجهاز / Device</span><strong>{e(str(row_dict["device_type"]))} - {e(str(row_dict["brand"]))}</strong></div>'
-        f'<div><span style="color:#64748b;display:block;font-size:11px;">S/N / IMEI</span><strong>{e(str(row_dict["device_sn"]))}</strong></div>'
-        f'<div><span style="color:#64748b;display:block;font-size:11px;">مواصفات الجهاز / Specs</span><strong>{e(str(row_dict["device_specs"]))}</strong></div>'
+        f'<div><span style="color:#64748b;display:block;font-size:11px;">الجهاز / Device</span><strong>{e(str(row_dict.get("device_type", "-")))} - {e(str(row_dict.get("brand", "-")))}</strong></div>'
+        f'<div><span style="color:#64748b;display:block;font-size:11px;">S/N / IMEI</span><strong>{e(str(row_dict.get("device_sn", "-")))}</strong></div>'
+        f'<div><span style="color:#64748b;display:block;font-size:11px;">مواصفات الجهاز / Specs</span><strong>{e(str(row_dict.get("device_specs", "-")))}</strong></div>'
         f'</div>'
         f'<div style="margin-bottom:10px;">'
         f'<div style="font-weight:700;color:#92400e;font-size:12.5px;margin-bottom:4px;">مشكلة الجهاز / Reported Issue</div>'
-        f'<div style="background:#fffbeb;border-inline-start:4px solid #f59e0b;padding:9px 11px;border-radius:8px;font-size:13px;">{e(str(row_dict["customer_issue"]))}</div>'
+        f'<div style="background:#fffbeb;border-inline-start:4px solid #f59e0b;padding:9px 11px;border-radius:8px;font-size:13px;">{e(str(row_dict.get("customer_issue", "-")))}</div>'
         f'</div>'
         f'{work_section}'
         f'{footer_html}'
@@ -201,20 +209,20 @@ def render_all_customers_single_invoice(df_src, is_rtl):
             blocks.append(
                 f'<div style="border:1px solid #cbd5e1;background:#f8fafc;border-radius:10px;padding:11px 13px;margin-bottom:10px;">'
                 f'<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:6px;border-bottom:1px solid #e2e8f0;padding-bottom:5px;">'
-                f'<span style="font-weight:700;color:#0f294a;font-size:13px;">{idx}. العميل: {e(str(r["customer_name"]))} | تذكرة: {e(str(r["ticket_id"]))}</span>'
-                f'<span style="background:#e0f2fe;color:#0369a1;padding:2px 10px;border-radius:999px;font-size:11px;font-weight:700;">{e(str(r["stage_disp"]))}</span>'
+                f'<span style="font-weight:700;color:#0f294a;font-size:13px;">{idx}. العميل: {e(str(r.get("customer_name", "-")))} | تذكرة: {e(str(r.get("ticket_id", "-")))}</span>'
+                f'<span style="background:#e0f2fe;color:#0369a1;padding:2px 10px;border-radius:999px;font-size:11px;font-weight:700;">{e(str(r.get("stage_disp", "-")))}</span>'
                 f'</div>'
                 f'<div style="font-size:12px;color:#0f294a;line-height:1.65;">'
-                f'<strong>الجوال:</strong> {e(str(r["customer_phone"]))} | '
-                f'<strong>الاستقبال:</strong> {e(str(r["reception_staff"]))} | '
-                f'<strong>الفني:</strong> {e(str(r["technician_name"]))}<br>'
-                f'<strong>الجهاز:</strong> {e(str(r["device_type"]))} - {e(str(r["brand"]))} | '
-                f'<strong>S/N:</strong> {e(str(r["device_sn"]))} | '
-                f'<strong>المواصفات:</strong> {e(str(r["device_specs"]))}<br>'
-                f'<strong>مشكلة الجهاز:</strong> {e(str(r["customer_issue"]))}<br>'
-                f'<strong>ما عمله الفني:</strong> {e(str(r["repaired_text"]))}<br>'
-                f'<strong>الدفع:</strong> {e(str(r["pay_disp"]))} ({e(str(r["payment_method"]))}) | '
-                f'<strong>المبلغ:</strong> {e(str(r["cost_est"]))}'
+                f'<strong>الجوال:</strong> {e(str(r.get("customer_phone", "-")))} | '
+                f'<strong>الاستقبال:</strong> {e(str(r.get("reception_staff", "-")))} | '
+                f'<strong>الفني:</strong> {e(str(r.get("technician_name", "-")))}<br>'
+                f'<strong>الجهاز:</strong> {e(str(r.get("device_type", "-")))} - {e(str(r.get("brand", "-")))} | '
+                f'<strong>S/N:</strong> {e(str(r.get("device_sn", "-")))} | '
+                f'<strong>المواصفات:</strong> {e(str(r.get("device_specs", "-")))}<br>'
+                f'<strong>مشكلة الجهاز:</strong> {e(str(r.get("customer_issue", "-")))}<br>'
+                f'<strong>ما عمله الفني:</strong> {e(str(r.get("repaired_text", "-")))}<br>'
+                f'<strong>الدفع:</strong> {e(str(r.get("pay_disp", "-")))} ({e(str(r.get("payment_method", "-")))}) | '
+                f'<strong>المبلغ:</strong> {e(str(r.get("cost_est", "-")))}'
                 f'</div>'
                 f'</div>'
             )
@@ -312,7 +320,7 @@ def load_demo_data():
             "لم يُسجل بعد",
             "جاري فحص تعريف الشبكة وصيانة النظام.",
             "عادية", "صيانة برمجية ونظام", "Maintenance", "Unpaid", "لم يُحدد بعد",
-            "2026-11-19", "فهد المطيري", "90 SAR",
+            "2026-11-19", "خالد الشمري", "90 SAR",
             append_history(
                 append_history("[]", "الاستقبال", "تم تسجيل الجهاز وإصدار فاتورة متابعة."),
                 "الصيانة",
@@ -327,7 +335,7 @@ def load_demo_data():
             "لم يُسجل بعد",
             "تم فحص القرص الميكانيكي ويوصى باستبدال الجهاز.",
             "عاجلة", "توصية باستبدال الجهاز", "Reception", "Unpaid", "لم يُحدد بعد",
-            "2026-11-20", "فهد المطيري", "3,200 SAR",
+            "2026-11-20", "عبدالله الحربي", "3,200 SAR",
             append_history("[]", "الاستقبال", "تم تسجيل الجهاز وإصدار فاتورة متابعة.")
         ),
     ]
@@ -383,6 +391,8 @@ TEXTS = {
         "init_note": "وصف المشكلة من العميل عند الاستقبال:",
         "init_note_ph": "مثال: الشاشة مكسورة، البطارية تفرغ بسرعة، أو الجهاز بطيء...",
         "go_maint": "نقل التذكرة بنفس الرقم إلى قسم الصيانة بعد الحفظ",
+        "assign_tech_lbl": "تعيين فني الصيانة عند النقل للصيانة:",
+        "custom_tech_lbl": "اكتب اسم فني الصيانة:",
         "save_rec_btn": "📥 حفظ التذكرة وإصدار فاتورة المتابعة",
         "default_rec_note": "تم تسجيل الجهاز في الاستقبال بانتظار الصيانة.",
         "saved_rec_msg": "✅ تم حفظ التذكرة برقم `{tid}` وإصدار فاتورة المتابعة.",
@@ -399,7 +409,7 @@ TEXTS = {
         "no_maint_tickets": "📭 لا توجد تذاكر مخصصة لقسم الصيانة حالياً.",
         "go_rec_btn": "🛎️ الذهاب لقسم الاستقبال",
         "pick_ticket_maint": "اختر الجهاز / التذكرة الموجودة في الصيانة:",
-        "fixed_tid": "**رقم التذكرة الثابت:** `{tid}` | **القسم الحالي:** `{stage}`",
+        "fixed_tid": "**رقم التذكرة الثابت:** `{tid}` | **القسم الحالي:** `{stage}` | **الفني المسؤول:** `{tech}`",
         "cust_info_line": "**العميل:** {cust} | **موظف الاستقبال:** {staff} | **رقم الجوال:** {phone}",
         "dev_info_line": "**معلومات الجهاز:** {dtype} — {brand} (`{sn}`)",
         "specs_info_line": "**مواصفات الجهاز:** {specs}",
@@ -545,6 +555,8 @@ TEXTS = {
         "init_note": "Reported device issue at reception:",
         "init_note_ph": "Example: Cracked screen, fast battery drain, or slow performance...",
         "go_maint": "Send ticket with the same ID to Maintenance after saving",
+        "assign_tech_lbl": "Assign technician when routing to Maintenance:",
+        "custom_tech_lbl": "Enter technician name:",
         "save_rec_btn": "📥 Save Ticket & Issue Tracking Receipt",
         "default_rec_note": "Registered at reception pending maintenance.",
         "saved_rec_msg": "✅ Ticket `{tid}` saved and tracking receipt generated.",
@@ -561,7 +573,7 @@ TEXTS = {
         "no_maint_tickets": "📭 No tickets assigned to Maintenance right now.",
         "go_rec_btn": "🛎️ Go to Reception",
         "pick_ticket_maint": "Select Maintenance ticket / device:",
-        "fixed_tid": "**Ticket ID:** `{tid}` | **Current Stage:** `{stage}`",
+        "fixed_tid": "**Ticket ID:** `{tid}` | **Current Stage:** `{stage}` | **Technician:** `{tech}`",
         "cust_info_line": "**Customer:** {cust} | **Receptionist:** {staff} | **Mobile:** {phone}",
         "dev_info_line": "**Device Info:** {dtype} — {brand} (`{sn}`)",
         "specs_info_line": "**Device Specs:** {specs}",
@@ -848,11 +860,11 @@ if st.session_state.current_ticket_id and not df_all.empty:
             f"""
             <div class="active-strip">
                 {t["active_ticket_bar"].format(
-                    tid=html.escape(str(cur_row["ticket_id"])),
-                    cust=html.escape(str(cur_row["customer_name"])),
-                    dev=html.escape(f"{cur_row['device_type']} - {cur_row['brand']}"),
-                    stage=html.escape(str(cur_row["stage_disp"])),
-                    pay=html.escape(str(cur_row["pay_disp"])),
+                    tid=html.escape(str(cur_row.get("ticket_id", "-"))),
+                    cust=html.escape(str(cur_row.get("customer_name", "-"))),
+                    dev=html.escape(f"{cur_row.get('device_type', '-')} - {cur_row.get('brand', '-')}"),
+                    stage=html.escape(str(cur_row.get("stage_disp", "-"))),
+                    pay=html.escape(str(cur_row.get("pay_disp", "-"))),
                 )}
             </div>
             """,
@@ -913,12 +925,24 @@ if dept_idx == 0:
         initial_note = st.text_area(t["init_note"], placeholder=t["init_note_ph"])
         go_to_maint = st.checkbox(t["go_maint"], value=True)
 
+        assigned_tech = "فهد المطيري"
+        if go_to_maint:
+            tech_choice = st.selectbox(t["assign_tech_lbl"], TECH_OPTIONS)
+            if tech_choice == "فني آخر (اكتب الاسم)":
+                assigned_tech = st.text_input(t["custom_tech_lbl"], value="فهد المطيري").strip() or "فهد المطيري"
+            else:
+                assigned_tech = tech_choice
+
         if st.button(t["save_rec_btn"], type="primary"):
             next_stage = "Maintenance" if go_to_maint else "Reception"
             issue_val = initial_note.strip() if initial_note.strip() else t["default_rec_note"]
             age_unit = "سنوات" if st.session_state.lang == "ar" and device_age != 1 else ("سنة" if st.session_state.lang == "ar" else "yrs")
             specs_val = f"{spec_a} | {spec_b} | {device_age} {age_unit}"
-            init_hist = append_history("[]", t["depts"][0], f"تم فتح التذكرة وإصدار فاتورة متابعة -> {t['stage_lbl'][next_stage]}")
+            init_hist = append_history(
+                "[]",
+                t["depts"][0],
+                f"تم فتح التذكرة وإصدار فاتورة متابعة -> {t['stage_lbl'][next_stage]} (الفني: {assigned_tech})"
+            )
 
             cursor.execute("""
                 INSERT OR REPLACE INTO tickets VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -940,7 +964,7 @@ if dept_idx == 0:
                 "Unpaid",
                 "لم يُحدد بعد",
                 str(ticket_date),
-                "فهد المطيري",
+                assigned_tech,
                 "0 SAR",
                 init_hist,
             ))
@@ -1066,36 +1090,50 @@ elif dept_idx == 1:
         row = maint_df[maint_df["ticket_id"] == chosen_id].iloc[0]
 
         with st.container(border=True):
-            st.write(t["fixed_tid"].format(tid=row["ticket_id"], stage=row["stage_disp"]))
             st.write(
-                t["cust_info_line"].format(
-                    cust=row["customer_name"],
-                    staff=row["reception_staff"],
-                    phone=row["customer_phone"],
+                t["fixed_tid"].format(
+                    tid=row.get("ticket_id", "-"),
+                    stage=row.get("stage_disp", "-"),
+                    tech=row.get("technician_name", "فهد المطيري"),
                 )
             )
-            st.write(t["dev_info_line"].format(dtype=row["device_type"], brand=row["brand"], sn=row["device_sn"]))
-            st.write(t["specs_info_line"].format(specs=row["device_specs"]))
-            st.warning(t["cust_issue_box"].format(issue=row["customer_issue"]))
-            st.success(t["repaired_box"].format(rep=row["repaired_text"]))
-            if row["tech_notes"]:
-                st.info(t["prev_notes"].format(notes=row["tech_notes"]))
+            st.write(
+                t["cust_info_line"].format(
+                    cust=row.get("customer_name", "-"),
+                    staff=row.get("reception_staff", "-"),
+                    phone=row.get("customer_phone", "-"),
+                )
+            )
+            st.write(
+                t["dev_info_line"].format(
+                    dtype=row.get("device_type", "-"),
+                    brand=row.get("brand", "-"),
+                    sn=row.get("device_sn", "-"),
+                )
+            )
+            st.write(t["specs_info_line"].format(specs=row.get("device_specs", "-")))
+            st.warning(t["cust_issue_box"].format(issue=row.get("customer_issue", "-")))
+            st.success(t["repaired_box"].format(rep=row.get("repaired_text", "-")))
+            if row.get("tech_notes"):
+                st.info(t["prev_notes"].format(notes=row.get("tech_notes", "")))
 
         with st.container(border=True):
             st.markdown(t["repair_write_sec"])
-            default_rep_val = "" if row["repaired_text"] in ["لم يُسجل عمل الفني بعد", "No technician work logged yet"] else row["repaired_text"]
+            cur_rep = str(row.get("repaired_text", ""))
+            default_rep_val = "" if cur_rep in ["لم يُسجل عمل الفني بعد", "No technician work logged yet"] else cur_rep
             repaired_input = st.text_area(t["repaired_lbl"], value=default_rep_val, placeholder=t["repaired_ph"])
 
             st.markdown(t["cost_sec"])
             dec_idx = 0
-            if row["decision"] in t["decision_opts"]:
-                dec_idx = t["decision_opts"].index(row["decision"])
+            if row.get("decision") in t["decision_opts"]:
+                dec_idx = t["decision_opts"].index(row.get("decision"))
             decision_val = st.selectbox(t["decision_lbl"], t["decision_opts"], index=dec_idx)
 
-            default_cost_val = "150 SAR" if (not row["cost_est"] or row["cost_est"] == "0 SAR") else row["cost_est"]
+            cur_cost = str(row.get("cost_est", ""))
+            default_cost_val = "150 SAR" if (not cur_cost or cur_cost == "0 SAR") else cur_cost
             est_cost_input = st.text_input(t["est_cost_lbl"], value=default_cost_val)
-            tech_person = st.text_input(t["tech_lbl"], value=row["technician_name"] if row["technician_name"] else "فهد المطيري")
-            tech_notes = st.text_area(t["tech_notes_lbl"], value=row["tech_notes"])
+            tech_person = st.text_input(t["tech_lbl"], value=str(row.get("technician_name") or "فهد المطيري"))
+            tech_notes = st.text_area(t["tech_notes_lbl"], value=str(row.get("tech_notes") or ""))
             send_to_billing = st.checkbox(t["send_bill"], value=True)
 
             if st.button(t["save_diag_btn"], type="primary"):
@@ -1104,7 +1142,7 @@ elif dept_idx == 1:
                 upd_hist = append_history(
                     row.get("status_history", "[]"),
                     t["depts"][1],
-                    f"تم تسجيل عمل الفني ({rep_final[:45]}) -> {t['stage_lbl'][new_stage]}"
+                    f"الفني ({tech_person.strip()}): {rep_final[:45]} -> {t['stage_lbl'][new_stage]}"
                 )
 
                 cursor.execute("""
@@ -1211,15 +1249,15 @@ elif dept_idx == 2:
 
             c_cost, c_pay, c_meth = st.columns(3)
             with c_cost:
-                new_cost = st.text_input(t["final_cost"], value=brow["cost_est"])
+                new_cost = st.text_input(t["final_cost"], value=str(brow.get("cost_est") or "0 SAR"))
             with c_pay:
-                pay_default_idx = 1 if brow["pay_code"] == "Paid" else 0
+                pay_default_idx = 1 if brow.get("pay_code") == "Paid" else 0
                 new_pay_lbl = st.selectbox(t["pay_status"], t["pay_opts"], index=pay_default_idx)
                 new_pay_db = "Paid" if new_pay_lbl == t["pay_opts"][1] else "Unpaid"
             with c_meth:
                 meth_idx = 0
-                if brow["payment_method"] in t["pay_methods"]:
-                    meth_idx = t["pay_methods"].index(brow["payment_method"])
+                if brow.get("payment_method") in t["pay_methods"]:
+                    meth_idx = t["pay_methods"].index(brow.get("payment_method"))
                 new_method = st.selectbox(t["pay_method_lbl"], t["pay_methods"], index=meth_idx)
 
             move_stage_lbl = st.selectbox(t["move_stage"], t["bill_stage_choices"], index=0)
@@ -1347,42 +1385,44 @@ elif dept_idx == 3:
             with st.container(border=True):
                 edit_tid = st.selectbox(t["mgr_pick_edit"], mgr_all_ids, index=mgr_def_idx, format_func=fmt_mgr_ticket)
                 st.session_state.current_ticket_id = edit_tid
-                erow = df_all[df_all["ticket_id"] == edit_tid].iloc[0]
+                erow = df_all[df_all["ticket_id"] == edit_tid].iloc[0].to_dict()
 
                 ec1, ec2 = st.columns(2)
                 with ec1:
-                    ed_cust = st.text_input(t["cust_name"], value=erow["customer_name"], key="ed_cust")
-                    ed_phone = st.text_input(t["mobile"], value=erow["customer_phone"], key="ed_phone")
-                    ed_sn = st.text_input(t["sn"], value=erow["device_sn"], key="ed_sn")
+                    ed_cust = st.text_input(t["cust_name"], value=str(erow.get("customer_name") or ""), key="ed_cust")
+                    ed_phone = st.text_input(t["mobile"], value=str(erow.get("customer_phone") or ""), key="ed_phone")
+                    ed_sn = st.text_input(t["sn"], value=str(erow.get("device_sn") or ""), key="ed_sn")
                 with ec2:
-                    ed_staff = st.text_input(t["rec_staff"], value=erow["reception_staff"], key="ed_staff")
-                    ed_tech = st.text_input(t["tech_lbl"], value=erow["technician_name"], key="ed_tech")
-                    ed_prio = st.text_input(t["priority"], value=erow["priority"], key="ed_prio")
+                    ed_staff = st.text_input(t["rec_staff"], value=str(erow.get("reception_staff") or ""), key="ed_staff")
+                    ed_tech = st.text_input(t["tech_lbl"], value=str(erow.get("technician_name") or "فهد المطيري"), key="ed_tech")
+                    ed_prio = st.text_input(t["priority"], value=str(erow.get("priority") or "متوسطة"), key="ed_prio")
 
                 ec3, ec4, ec5 = st.columns(3)
                 with ec3:
-                    stage_idx_now = {"Reception": 0, "Maintenance": 1, "Billing": 2}.get(erow["stage_code"], 0)
+                    stage_idx_now = {"Reception": 0, "Maintenance": 1, "Billing": 2}.get(erow.get("stage_code", "Reception"), 0)
                     ed_stage_lbl = st.selectbox(t["mgr_stage_lbl"], t["stage_opts"], index=stage_idx_now, key="ed_stage")
-                    ed_stage_db = {"الاستقبال": "Reception", "الصيانة": "Maintenance", "الحساب": "Billing",
-                                   "Reception": "Reception", "Maintenance": "Maintenance", "Billing": "Billing"}[ed_stage_lbl]
+                    ed_stage_db = {
+                        "الاستقبال": "Reception", "الصيانة": "Maintenance", "الحساب": "Billing",
+                        "Reception": "Reception", "Maintenance": "Maintenance", "Billing": "Billing"
+                    }[ed_stage_lbl]
                 with ec4:
-                    ed_cost = st.text_input(t["mgr_cost_lbl"], value=erow["cost_est"], key="ed_cost")
+                    ed_cost = st.text_input(t["mgr_cost_lbl"], value=str(erow.get("cost_est") or "0 SAR"), key="ed_cost")
                 with ec5:
-                    pay_idx_now = 1 if erow["pay_code"] == "Paid" else 0
+                    pay_idx_now = 1 if erow.get("pay_code") == "Paid" else 0
                     ed_pay_lbl = st.selectbox(t["pay_status"], t["pay_opts"], index=pay_idx_now, key="ed_pay")
                     ed_pay_db = "Paid" if ed_pay_lbl == t["pay_opts"][1] else "Unpaid"
 
-                ed_specs = st.text_input(t["mgr_specs_lbl"], value=erow["device_specs"], key="ed_specs")
-                ed_issue = st.text_input(t["init_note"], value=erow["customer_issue"], key="ed_issue")
-                ed_rep = st.text_input(t["mgr_rep_lbl"], value=erow["repaired_text"], key="ed_rep")
-                ed_dec = st.text_input(t["mgr_decision_lbl"], value=erow["decision"], key="ed_dec")
-                ed_notes = st.text_area(t["mgr_notes_lbl"], value=erow["tech_notes"], key="ed_notes")
+                ed_specs = st.text_input(t["mgr_specs_lbl"], value=str(erow.get("device_specs") or ""), key="ed_specs")
+                ed_issue = st.text_input(t["init_note"], value=str(erow.get("customer_issue") or ""), key="ed_issue")
+                ed_rep = st.text_input(t["mgr_rep_lbl"], value=str(erow.get("repaired_text") or ""), key="ed_rep")
+                ed_dec = st.text_input(t["mgr_decision_lbl"], value=str(erow.get("decision") or ""), key="ed_dec")
+                ed_notes = st.text_area(t["mgr_notes_lbl"], value=str(erow.get("tech_notes") or ""), key="ed_notes")
 
                 if st.button(t["mgr_save_edit_btn"], type="primary"):
                     mgr_hist = append_history(
                         erow.get("status_history", "[]"),
                         t["depts"][3],
-                        f"تعديل إداري -> القسم: {ed_stage_lbl} | الدفع: {ed_pay_lbl}"
+                        f"تعديل إداري -> القسم: {ed_stage_lbl} | الفني: {ed_tech.strip()} | الدفع: {ed_pay_lbl}"
                     )
                     cursor.execute("""
                         UPDATE tickets
@@ -1417,7 +1457,7 @@ elif dept_idx == 3:
                 mgr_card_mode_lbl = st.selectbox(t["mgr_preview_type"], t["mgr_preview_opts"], key="mgr_card_mode")
                 is_bill_preview = (mgr_card_mode_lbl == t["mgr_preview_opts"][0])
 
-                preview_row = erow.to_dict()
+                preview_row = dict(erow)
                 preview_row["customer_name"] = ed_cust.strip()
                 preview_row["customer_phone"] = ed_phone.strip()
                 preview_row["reception_staff"] = ed_staff.strip()
@@ -1445,7 +1485,7 @@ elif dept_idx == 3:
                         is_rtl=(st.session_state.lang == "ar"),
                         mode="billing" if is_bill_preview else "tracking",
                         pay_label=ed_pay_lbl,
-                        method_label=erow.get("payment_method", "-"),
+                        method_label=str(erow.get("payment_method") or "-"),
                         final_amount=ed_cost.strip(),
                         is_paid=(ed_pay_db == "Paid"),
                     )
