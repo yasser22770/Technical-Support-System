@@ -6,7 +6,7 @@ import streamlit as st
 
 MANAGER_PIN = "MGR-2026"
 
-conn = sqlite3.connect("enterprise_helpdesk_mgr_full_v1.db", check_same_thread=False)
+conn = sqlite3.connect("enterprise_helpdesk_issue_vis_v1.db", check_same_thread=False)
 cursor = conn.cursor()
 
 cursor.execute("""
@@ -18,6 +18,7 @@ cursor.execute("""
         device_sn TEXT,
         device_type TEXT,
         brand TEXT,
+        customer_issue TEXT,
         specs_summary TEXT,
         issues_summary TEXT,
         tech_notes TEXT,
@@ -106,28 +107,34 @@ def load_demo_data():
     sample_tickets = [
         (
             "TK-40101", "ريما القحطاني", "سالم الدوسري", "0501122334", "SN-IP-77412",
-            "جوال (Smartphone)", "Apple", "256 GB | iOS / iPadOS | 2 yrs",
+            "جوال (Smartphone)", "Apple",
+            "البطارية تفرغ بسرعة خلال ساعتين وتنطفئ فجأة عند 25%.",
+            "256 GB | iOS / iPadOS | 2 yrs",
             "Battery", "Battery health degraded; battery replacement completed.",
             "Medium", "Battery Replacement", "Billing", "Unpaid", "2026-11-18",
             "فهد المطيري", "250 SAR"
         ),
         (
             "TK-40102", "عمر الزهراني", "سالم الدوسري", "0559988776", "SN-HP-61904",
-            "لابتوب (Laptop)", "HP", "8 GB | SATA SSD | 2 yrs",
+            "لابتوب (Laptop)", "HP",
+            "الجهاز يفصل الواي فاي باستمرار ويوجد بطء في فتح البرامج.",
+            "8 GB | SATA SSD | 2 yrs",
             "Network/Wi-Fi, Driver/App", "Inspected Wi-Fi adapter and OS services.",
             "Normal", "Software & Preventive", "Maintenance", "Unpaid", "2026-11-19",
             "فهد المطيري", "90 SAR"
         ),
         (
             "TK-40103", "لينا الشهري", "سالم الدوسري", "0544433221", "SN-LN-48290",
-            "كمبيوتر مكتبي (Desktop PC)", "Lenovo", "8 GB | HDD تقليدي | 8 yrs",
+            "كمبيوتر مكتبي (Desktop PC)", "Lenovo",
+            "يصدر صوت طقطقة من الداخل ولا يقلع إلى النظام.",
+            "8 GB | HDD تقليدي | 8 yrs",
             "HDD Clicking, Boot Failure", "Mechanical drive failure on an 8-year-old desktop; replacement advised.",
             "Urgent", "Device Replacement", "Maintenance", "Unpaid", "2026-11-20",
             "فهد المطيري", "3,200 SAR"
         ),
     ]
     cursor.executemany(
-        "INSERT OR IGNORE INTO tickets VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        "INSERT OR IGNORE INTO tickets VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
         sample_tickets
     )
     conn.commit()
@@ -175,14 +182,15 @@ TEXTS = {
         "no_tickets": "لا توجد تذاكر مسجلة بعد.",
         "load_demo": "✨ تعبئة بيانات تجريبية للاختبار",
         "maint_title": "🔧 قسم الصيانة — الفحص والتشخيص وتجهيز الفاتورة",
-        "maint_caption": "تظهر هنا التذاكر المخصصة لقسم الصيانة فقط.",
+        "maint_caption": "تظهر هنا التذاكر المخصصة لقسم الصيانة فقط مع وصف المشكلة الوارد من الاستقبال.",
         "no_maint_tickets": "📭 لا توجد تذاكر مخصصة لقسم الصيانة حالياً.",
         "go_rec_btn": "🛎️ الذهاب لقسم الاستقبال",
         "pick_ticket_maint": "اختر التذكرة المخصصة للصيانة:",
         "fixed_tid": "**رقم التذكرة الثابت:** `{tid}` | **القسم الحالي:** `{stage}`",
         "cust_info_line": "**العميل:** {cust} | **موظف الاستقبال:** {staff} | **رقم الجوال:** {phone}",
         "dev_info_line": "**الجهاز:** {dtype} — {brand} (`{sn}`)",
-        "prev_notes": "**ملاحظات سابقة:** {notes}",
+        "cust_issue_box": "**📝 وصف المشكلة من العميل (الاستقبال):** {issue}",
+        "prev_notes": "**ملاحظات فنية سابقة:** {notes}",
         "specs_sec": "#### 1️⃣ مواصفات الجهاز أثناء الفحص",
         "age_lbl": "عمر الجهاز (بالسنوات)",
         "ram_lbl": "الذاكرة (RAM)",
@@ -283,9 +291,9 @@ TEXTS = {
         "mgr_pin_hint": "انتقل إلى تبويب «المدير» وأدخل الرقم أعلاه لتجربة الإدارة الكاملة لجميع الأقسام.",
         "feats_title": "#### ✨ أبرز مزايا النظام:",
         "feats": [
+            "- **وضوح المشكلة للفني:** يظهر وصف مشكلة العميل من الاستقبال بوضوح للفني طوال فترة الفحص والصيانة.",
             "- **إدارة كاملة في قسم المدير:** إنشاء تذاكر، تعديل أي تذكرة، وتحويلها بين الاستقبال والصيانة والحساب وتحديث الدفع.",
             "- **عزل التذاكر حسب القسم:** قسم الصيانة يعرض تذاكر الصيانة فقط، وقسم الحساب يعرض فواتير الحساب فقط.",
-            "- **تصنيف ذكي وتقارير:** ربط أنواع الأجهزة بشركاتها الصحيحة، وحفظ SQLite وتصدير .txt و.csv.",
         ],
     },
     "en": {
@@ -329,14 +337,15 @@ TEXTS = {
         "no_tickets": "No tickets registered yet.",
         "load_demo": "✨ Load Demo Data",
         "maint_title": "🔧 Maintenance — Inspection, Diagnostics & Cost Estimate",
-        "maint_caption": "Only tickets assigned to Maintenance are shown here.",
+        "maint_caption": "Only tickets assigned to Maintenance are shown here, including the reported customer issue.",
         "no_maint_tickets": "📭 No tickets assigned to Maintenance right now.",
         "go_rec_btn": "🛎️ Go to Reception",
         "pick_ticket_maint": "Select Maintenance ticket to inspect:",
         "fixed_tid": "**Ticket ID:** `{tid}` | **Current Stage:** `{stage}`",
         "cust_info_line": "**Customer:** {cust} | **Receptionist:** {staff} | **Mobile:** {phone}",
         "dev_info_line": "**Device:** {dtype} — {brand} (`{sn}`)",
-        "prev_notes": "**Previous Notes:** {notes}",
+        "cust_issue_box": "**📝 Reported Customer Issue (Reception):** {issue}",
+        "prev_notes": "**Previous Technician Notes:** {notes}",
         "specs_sec": "#### 1️⃣ Device Specifications",
         "age_lbl": "Device Age (Years)",
         "ram_lbl": "RAM",
@@ -438,9 +447,9 @@ TEXTS = {
         "mgr_pin_hint": "Switch to the «Manager» tab and enter the PIN above to test full management across all departments.",
         "feats_title": "#### ✨ Key Features:",
         "feats": [
+            "- **Visible Issue for Technician:** The customer's reported issue from Reception stays clearly visible in Maintenance.",
             "- **Full Manager Control:** Create tickets, edit any ticket, route across Reception, Maintenance, and Billing, and update payment status.",
             "- **Department-Scoped Queues:** Maintenance only sees Maintenance tickets; Billing only sees Billing invoices.",
-            "- **Matched Brands & Exports:** Category-matched device brands, SQLite storage, and .txt / .csv exports.",
         ],
     },
 }
@@ -624,10 +633,10 @@ if dept_idx == 0:
 
     if st.button(t["save_rec_btn"], type="primary"):
         next_stage = "Maintenance" if go_to_maint else "Reception"
-        notes_val = initial_note.strip() if initial_note.strip() else t["default_rec_note"]
+        issue_val = initial_note.strip() if initial_note.strip() else t["default_rec_note"]
 
         cursor.execute("""
-            INSERT OR REPLACE INTO tickets VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            INSERT OR REPLACE INTO tickets VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """, (
             active_new_id,
             customer_name.strip(),
@@ -636,9 +645,10 @@ if dept_idx == 0:
             device_sn,
             device_type,
             brand,
+            issue_val,
             "Pending inspection",
             "Pending diagnostics",
-            notes_val,
+            "",
             priority_level,
             "Pending",
             next_stage,
@@ -671,30 +681,26 @@ if dept_idx == 0:
             disp_df = df_all.rename(columns={
                 "ticket_id": "رقم التذكرة",
                 "customer_name": "اسم العميل",
-                "reception_staff": "موظف الاستقبال",
                 "customer_phone": "رقم الجوال",
                 "device_type": "نوع الجهاز",
-                "brand": "الشركة",
+                "customer_issue": "وصف المشكلة",
                 "stage_disp": "القسم الحالي",
-                "ticket_date": "التاريخ",
             })
             st.dataframe(
-                disp_df[["رقم التذكرة", "اسم العميل", "موظف الاستقبال", "رقم الجوال", "نوع الجهاز", "الشركة", "القسم الحالي", "التاريخ"]],
+                disp_df[["رقم التذكرة", "اسم العميل", "رقم الجوال", "نوع الجهاز", "وصف المشكلة", "القسم الحالي"]],
                 use_container_width=True,
             )
         else:
             disp_df = df_all.rename(columns={
                 "ticket_id": "Ticket ID",
                 "customer_name": "Customer",
-                "reception_staff": "Receptionist",
                 "customer_phone": "Mobile",
                 "device_type": "Device",
-                "brand": "Brand",
+                "customer_issue": "Reported Issue",
                 "stage_disp": "Stage",
-                "ticket_date": "Date",
             })
             st.dataframe(
-                disp_df[["Ticket ID", "Customer", "Receptionist", "Mobile", "Device", "Brand", "Stage", "Date"]],
+                disp_df[["Ticket ID", "Customer", "Mobile", "Device", "Reported Issue", "Stage"]],
                 use_container_width=True,
             )
 
@@ -740,7 +746,9 @@ elif dept_idx == 1:
                 )
             )
             st.write(t["dev_info_line"].format(dtype=row["device_type"], brand=row["brand"], sn=row["device_sn"]))
-            st.info(t["prev_notes"].format(notes=row["tech_notes"]))
+            st.warning(t["cust_issue_box"].format(issue=row["customer_issue"]))
+            if row["tech_notes"]:
+                st.info(t["prev_notes"].format(notes=row["tech_notes"]))
 
         mobile_mode = is_mobile_or_tablet(row["device_type"])
 
@@ -977,6 +985,7 @@ elif dept_idx == 2:
                 )
             )
             st.write(t["dev_info_line"].format(dtype=brow["device_type"], brand=brow["brand"], sn=brow["device_sn"]))
+            st.write(t["cust_issue_box"].format(issue=brow["customer_issue"]))
             st.write(f"**{brow['decision']}** | `{brow['cost_est']}` | `{brow['pay_disp']}`")
 
         c_cost, c_pay = st.columns(2)
@@ -1010,6 +1019,7 @@ elif dept_idx == 2:
             f"Receptionist: {brow['reception_staff']}",
             f"Mobile: {brow['customer_phone']}",
             f"Device: {brow['device_type']} - {brow['brand']} ({brow['device_sn']})",
+            f"Reported Issue: {brow['customer_issue']}",
             f"Decision: {brow['decision']}",
             f"Amount: {new_cost}",
             f"Payment Status: {new_pay_lbl}",
@@ -1084,7 +1094,6 @@ elif dept_idx == 3:
             st.markdown(t["chart_dec"])
             st.bar_chart(df_all["decision"].value_counts())
 
-            # إدارة وتعديل كامل لأي تذكرة عبر جميع الأقسام
             st.markdown("---")
             st.markdown(t["mgr_edit_sec"])
 
@@ -1124,6 +1133,7 @@ elif dept_idx == 3:
                 ed_pay_lbl = st.selectbox(t["pay_status"], t["pay_opts"], index=pay_idx_now, key="ed_pay")
                 ed_pay_db = "Paid" if ed_pay_lbl == t["pay_opts"][1] else "Unpaid"
 
+            ed_issue = st.text_input(t["init_note"], value=erow["customer_issue"], key="ed_issue")
             ed_dec = st.text_input(t["mgr_decision_lbl"], value=erow["decision"], key="ed_dec")
             ed_notes = st.text_area(t["mgr_notes_lbl"], value=erow["tech_notes"], key="ed_notes")
 
@@ -1131,14 +1141,16 @@ elif dept_idx == 3:
                 cursor.execute("""
                     UPDATE tickets
                     SET customer_name = ?, reception_staff = ?, customer_phone = ?,
-                        device_sn = ?, priority = ?, decision = ?, stage = ?,
-                        payment_status = ?, technician_name = ?, cost_est = ?, tech_notes = ?
+                        device_sn = ?, customer_issue = ?, priority = ?, decision = ?,
+                        stage = ?, payment_status = ?, technician_name = ?,
+                        cost_est = ?, tech_notes = ?
                     WHERE ticket_id = ?
                 """, (
                     ed_cust.strip(),
                     ed_staff.strip(),
                     ed_phone.strip(),
                     ed_sn.strip(),
+                    ed_issue.strip(),
                     ed_prio.strip(),
                     ed_dec.strip(),
                     ed_stage_db,
@@ -1152,7 +1164,6 @@ elif dept_idx == 3:
                 st.success(t["mgr_saved_edit_msg"].format(tid=edit_tid, stage=ed_stage_lbl))
                 st.rerun()
 
-            # إضافة تذكرة مباشرة من المدير وتوجيهها لأي قسم
             st.markdown("---")
             st.markdown(t["mgr_add_sec"])
             ac1, ac2 = st.columns(2)
@@ -1168,6 +1179,7 @@ elif dept_idx == 3:
             lang_brands_map = DEVICE_BRANDS[st.session_state.lang]
             add_dtype = st.selectbox(t["dev_type"], list(lang_brands_map.keys()), key="add_dtype")
             add_brand = st.selectbox(t["brand"], lang_brands_map[add_dtype], key="add_brand")
+            add_issue = st.text_input(t["init_note"], "وصف المشكلة من العميل", key="add_issue")
             add_dec = st.text_input(t["mgr_decision_lbl"], "Inspection & Repair", key="add_dec")
 
             if st.button(t["mgr_create_btn"]):
@@ -1175,7 +1187,7 @@ elif dept_idx == 3:
                 add_stage_db = {"الاستقبال": "Reception", "الصيانة": "Maintenance", "الحساب": "Billing",
                                 "Reception": "Reception", "Maintenance": "Maintenance", "Billing": "Billing"}[add_stage_lbl]
                 cursor.execute("""
-                    INSERT INTO tickets VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    INSERT INTO tickets VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """, (
                     new_mgr_tid,
                     add_cust.strip(),
@@ -1184,6 +1196,7 @@ elif dept_idx == 3:
                     add_sn.strip(),
                     add_dtype,
                     add_brand,
+                    add_issue.strip(),
                     "Managed by Manager",
                     "Managed by Manager",
                     "Created from Manager dashboard.",
