@@ -17,7 +17,7 @@ TECH_OPTIONS = [
     "فني آخر (اكتب الاسم)",
 ]
 
-conn = sqlite3.connect("enterprise_helpdesk_mgr_switch_v1.db", check_same_thread=False)
+conn = sqlite3.connect("enterprise_helpdesk_lena_fix_v1.db", check_same_thread=False)
 cursor = conn.cursor()
 
 cursor.execute("""
@@ -334,9 +334,13 @@ def load_demo_data():
             "يصدر صوت طقطقة من الداخل ولا يقلع إلى النظام.",
             "لم يُسجل بعد",
             "تم فحص القرص الميكانيكي ويوصى باستبدال الجهاز.",
-            "عاجلة", "توصية باستبدال الجهاز", "Reception", "Unpaid", "لم يُحدد بعد",
+            "عاجلة", "توصية باستبدال الجهاز", "Maintenance", "Unpaid", "لم يُحدد بعد",
             "2026-11-20", "عبدالله الحربي", "3,200 SAR",
-            append_history("[]", "الاستقبال", "تم تسجيل الجهاز وإصدار فاتورة متابعة.")
+            append_history(
+                append_history("[]", "الاستقبال", "تم تسجيل الجهاز وإصدار فاتورة متابعة."),
+                "الصيانة",
+                "تم تحويل التذكرة إلى قسم الصيانة للفحص."
+            )
         ),
     ]
     cursor.executemany(
