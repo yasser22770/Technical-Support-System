@@ -17,7 +17,7 @@ TECH_OPTIONS = [
     "فني آخر (اكتب الاسم)",
 ]
 
-conn = sqlite3.connect("enterprise_helpdesk_dup_fix_v1.db", check_same_thread=False)
+conn = sqlite3.connect("enterprise_helpdesk_mgr_switch_v1.db", check_same_thread=False)
 cursor = conn.cursor()
 
 cursor.execute("""
@@ -482,7 +482,7 @@ TEXTS = {
         "mgr_create_btn": "➕ إنشاء التذكرة في النظام",
         "mgr_created_msg": "✅ تم إنشاء التذكرة `{tid}` في قسم `{stage}`.",
         "mgr_edit_sec": "#### 🛠️ تعديل وتحكم كامل بأي تذكرة عبر الأقسام",
-        "mgr_pick_edit": "اختر التذكرة المراد إدارتها أو تعديلها:",
+        "mgr_pick_edit": "اختر العميل / التذكرة المراد إدارتها أو تعديلها:",
         "mgr_stage_lbl": "تحويل التذكرة إلى القسم",
         "mgr_specs_lbl": "مواصفات الجهاز",
         "mgr_rep_lbl": "ما عمله الفني (كتابة)",
@@ -652,7 +652,7 @@ TEXTS = {
         "mgr_create_btn": "➕ Create Ticket in System",
         "mgr_created_msg": "✅ Created ticket `{tid}` in `{stage}`.",
         "mgr_edit_sec": "#### 🛠️ Full Edit & Routing Control for Any Ticket",
-        "mgr_pick_edit": "Select ticket to manage or edit:",
+        "mgr_pick_edit": "Select customer / ticket to manage or edit:",
         "mgr_stage_lbl": "Route Ticket to Department",
         "mgr_specs_lbl": "Device Specs",
         "mgr_rep_lbl": "Technician Work Done (Written)",
@@ -700,6 +700,9 @@ if "draft_ticket_id" not in st.session_state:
 
 if "current_ticket_id" not in st.session_state:
     st.session_state.current_ticket_id = None
+
+if "mgr_last_picked_tid" not in st.session_state:
+    st.session_state.mgr_last_picked_tid = None
 
 if "manager_unlocked" not in st.session_state:
     st.session_state.manager_unlocked = False
@@ -1133,22 +1136,22 @@ elif dept_idx == 1:
             st.markdown(t["repair_write_sec"])
             cur_rep = str(row.get("repaired_text", ""))
             default_rep_val = "" if cur_rep in ["لم يُسجل عمل الفني بعد", "No technician work logged yet"] else cur_rep
-            repaired_input = st.text_area(t["repaired_lbl"], value=default_rep_val, placeholder=t["repaired_ph"])
+            repaired_input = st.text_area(t["repaired_lbl"], value=default_rep_val, placeholder=t["repaired_ph"], key=f"m_rep_{chosen_id}")
 
             st.markdown(t["cost_sec"])
             dec_idx = 0
             if row.get("decision") in t["decision_opts"]:
                 dec_idx = t["decision_opts"].index(row.get("decision"))
-            decision_val = st.selectbox(t["decision_lbl"], t["decision_opts"], index=dec_idx)
+            decision_val = st.selectbox(t["decision_lbl"], t["decision_opts"], index=dec_idx, key=f"m_dec_{chosen_id}")
 
             cur_cost = str(row.get("cost_est", ""))
             default_cost_val = "150 SAR" if (not cur_cost or cur_cost == "0 SAR") else cur_cost
-            est_cost_input = st.text_input(t["est_cost_lbl"], value=default_cost_val)
-            tech_person = st.text_input(t["tech_lbl"], value=str(row.get("technician_name") or "فهد المطيري"))
-            tech_notes = st.text_area(t["tech_notes_lbl"], value=str(row.get("tech_notes") or ""))
-            send_to_billing = st.checkbox(t["send_bill"], value=True)
+            est_cost_input = st.text_input(t["est_cost_lbl"], value=default_cost_val, key=f"m_cost_{chosen_id}")
+            tech_person = st.text_input(t["tech_lbl"], value=str(row.get("technician_name") or "فهد المطيري"), key=f"m_tech_{chosen_id}")
+            tech_notes = st.text_area(t["tech_notes_lbl"], value=str(row.get("tech_notes") or ""), key=f"m_notes_{chosen_id}")
+            send_to_billing = st.checkbox(t["send_bill"], value=True, key=f"m_bill_{chosen_id}")
 
-            if st.button(t["save_diag_btn"], type="primary"):
+            if st.button(t["save_diag_btn"], type="primary", key=f"m_save_{chosen_id}"):
                 rep_final = repaired_input.strip() if repaired_input.strip() else t["repaired_empty_msg"]
                 new_stage = "Billing" if send_to_billing else "Maintenance"
                 upd_hist = append_history(
@@ -1261,21 +1264,21 @@ elif dept_idx == 2:
 
             c_cost, c_pay, c_meth = st.columns(3)
             with c_cost:
-                new_cost = st.text_input(t["final_cost"], value=str(brow.get("cost_est") or "0 SAR"))
+                new_cost = st.text_input(t["final_cost"], value=str(brow.get("cost_est") or "0 SAR"), key=f"b_cost_{bill_id}")
             with c_pay:
                 pay_default_idx = 1 if brow.get("pay_code") == "Paid" else 0
-                new_pay_lbl = st.selectbox(t["pay_status"], t["pay_opts"], index=pay_default_idx)
+                new_pay_lbl = st.selectbox(t["pay_status"], t["pay_opts"], index=pay_default_idx, key=f"b_pay_{bill_id}")
                 new_pay_db = "Paid" if new_pay_lbl == t["pay_opts"][1] else "Unpaid"
             with c_meth:
                 meth_idx = 0
                 if brow.get("payment_method") in t["pay_methods"]:
                     meth_idx = t["pay_methods"].index(brow.get("payment_method"))
-                new_method = st.selectbox(t["pay_method_lbl"], t["pay_methods"], index=meth_idx)
+                new_method = st.selectbox(t["pay_method_lbl"], t["pay_methods"], index=meth_idx, key=f"b_meth_{bill_id}")
 
-            move_stage_lbl = st.selectbox(t["move_stage"], t["bill_stage_choices"], index=0)
+            move_stage_lbl = st.selectbox(t["move_stage"], t["bill_stage_choices"], index=0, key=f"b_stg_{bill_id}")
             stage_to_db = "Billing" if move_stage_lbl == t["bill_stage_choices"][0] else "Maintenance"
 
-            if st.button(t["save_bill_btn"], type="primary"):
+            if st.button(t["save_bill_btn"], type="primary", key=f"b_save_{bill_id}"):
                 pay_hist = append_history(
                     brow.get("status_history", "[]"),
                     t["depts"][2],
@@ -1392,45 +1395,57 @@ elif dept_idx == 3:
 
             def fmt_mgr_ticket(tid):
                 r = df_all[df_all["ticket_id"] == tid].iloc[0]
-                return f"{r['ticket_id']} | {r['customer_name']} — {r['stage_disp']} ({r['pay_disp']})"
+                return f"{r['customer_name']} | {r['ticket_id']} — {r['stage_disp']} ({r['pay_disp']})"
 
             with st.container(border=True):
-                edit_tid = st.selectbox(t["mgr_pick_edit"], mgr_all_ids, index=mgr_def_idx, format_func=fmt_mgr_ticket)
-                st.session_state.current_ticket_id = edit_tid
+                edit_tid = st.selectbox(
+                    t["mgr_pick_edit"],
+                    mgr_all_ids,
+                    index=mgr_def_idx,
+                    format_func=fmt_mgr_ticket,
+                    key="mgr_edit_selector",
+                )
+
+                if st.session_state.mgr_last_picked_tid != edit_tid:
+                    st.session_state.mgr_last_picked_tid = edit_tid
+                    st.session_state.current_ticket_id = edit_tid
+                    st.session_state.show_mgr_card = False
+
                 erow = df_all[df_all["ticket_id"] == edit_tid].iloc[0].to_dict()
+                ek = edit_tid
 
                 ec1, ec2 = st.columns(2)
                 with ec1:
-                    ed_cust = st.text_input(t["cust_name"], value=str(erow.get("customer_name") or ""), key="ed_cust")
-                    ed_phone = st.text_input(t["mobile"], value=str(erow.get("customer_phone") or ""), key="ed_phone")
-                    ed_sn = st.text_input(t["sn"], value=str(erow.get("device_sn") or ""), key="ed_sn")
+                    ed_cust = st.text_input(t["cust_name"], value=str(erow.get("customer_name") or ""), key=f"ed_cust_{ek}")
+                    ed_phone = st.text_input(t["mobile"], value=str(erow.get("customer_phone") or ""), key=f"ed_phone_{ek}")
+                    ed_sn = st.text_input(t["sn"], value=str(erow.get("device_sn") or ""), key=f"ed_sn_{ek}")
                 with ec2:
-                    ed_staff = st.text_input(t["rec_staff"], value=str(erow.get("reception_staff") or ""), key="ed_staff")
-                    ed_tech = st.text_input(t["tech_lbl"], value=str(erow.get("technician_name") or "فهد المطيري"), key="ed_tech")
-                    ed_prio = st.text_input(t["priority"], value=str(erow.get("priority") or "متوسطة"), key="ed_prio")
+                    ed_staff = st.text_input(t["rec_staff"], value=str(erow.get("reception_staff") or ""), key=f"ed_staff_{ek}")
+                    ed_tech = st.text_input(t["tech_lbl"], value=str(erow.get("technician_name") or "فهد المطيري"), key=f"ed_tech_{ek}")
+                    ed_prio = st.text_input(t["priority"], value=str(erow.get("priority") or "متوسطة"), key=f"ed_prio_{ek}")
 
                 ec3, ec4, ec5 = st.columns(3)
                 with ec3:
                     stage_idx_now = {"Reception": 0, "Maintenance": 1, "Billing": 2}.get(erow.get("stage_code", "Reception"), 0)
-                    ed_stage_lbl = st.selectbox(t["mgr_stage_lbl"], t["stage_opts"], index=stage_idx_now, key="ed_stage")
+                    ed_stage_lbl = st.selectbox(t["mgr_stage_lbl"], t["stage_opts"], index=stage_idx_now, key=f"ed_stage_{ek}")
                     ed_stage_db = {
                         "الاستقبال": "Reception", "الصيانة": "Maintenance", "الحساب": "Billing",
                         "Reception": "Reception", "Maintenance": "Maintenance", "Billing": "Billing"
                     }[ed_stage_lbl]
                 with ec4:
-                    ed_cost = st.text_input(t["mgr_cost_lbl"], value=str(erow.get("cost_est") or "0 SAR"), key="ed_cost")
+                    ed_cost = st.text_input(t["mgr_cost_lbl"], value=str(erow.get("cost_est") or "0 SAR"), key=f"ed_cost_{ek}")
                 with ec5:
                     pay_idx_now = 1 if erow.get("pay_code") == "Paid" else 0
-                    ed_pay_lbl = st.selectbox(t["pay_status"], t["pay_opts"], index=pay_idx_now, key="ed_pay")
+                    ed_pay_lbl = st.selectbox(t["pay_status"], t["pay_opts"], index=pay_idx_now, key=f"ed_pay_{ek}")
                     ed_pay_db = "Paid" if ed_pay_lbl == t["pay_opts"][1] else "Unpaid"
 
-                ed_specs = st.text_input(t["mgr_specs_lbl"], value=str(erow.get("device_specs") or ""), key="ed_specs")
-                ed_issue = st.text_input(t["init_note"], value=str(erow.get("customer_issue") or ""), key="ed_issue")
-                ed_rep = st.text_input(t["mgr_rep_lbl"], value=str(erow.get("repaired_text") or ""), key="ed_rep")
-                ed_dec = st.text_input(t["mgr_decision_lbl"], value=str(erow.get("decision") or ""), key="ed_dec")
-                ed_notes = st.text_area(t["mgr_notes_lbl"], value=str(erow.get("tech_notes") or ""), key="ed_notes")
+                ed_specs = st.text_input(t["mgr_specs_lbl"], value=str(erow.get("device_specs") or ""), key=f"ed_specs_{ek}")
+                ed_issue = st.text_input(t["init_note"], value=str(erow.get("customer_issue") or ""), key=f"ed_issue_{ek}")
+                ed_rep = st.text_input(t["mgr_rep_lbl"], value=str(erow.get("repaired_text") or ""), key=f"ed_rep_{ek}")
+                ed_dec = st.text_input(t["mgr_decision_lbl"], value=str(erow.get("decision") or ""), key=f"ed_dec_{ek}")
+                ed_notes = st.text_area(t["mgr_notes_lbl"], value=str(erow.get("tech_notes") or ""), key=f"ed_notes_{ek}")
 
-                if st.button(t["mgr_save_edit_btn"], type="primary", key="mgr_save_edit_submit"):
+                if st.button(t["mgr_save_edit_btn"], type="primary", key=f"mgr_save_edit_submit_{ek}"):
                     mgr_hist = append_history(
                         erow.get("status_history", "[]"),
                         t["depts"][3],
@@ -1466,7 +1481,7 @@ elif dept_idx == 3:
                     st.success(t["mgr_saved_edit_msg"].format(tid=edit_tid, stage=ed_stage_lbl))
                     st.rerun()
 
-                mgr_card_mode_lbl = st.selectbox(t["mgr_preview_type"], t["mgr_preview_opts"], key="mgr_card_mode")
+                mgr_card_mode_lbl = st.selectbox(t["mgr_preview_type"], t["mgr_preview_opts"], key=f"mgr_card_mode_{ek}")
                 is_bill_preview = (mgr_card_mode_lbl == t["mgr_preview_opts"][0])
 
                 preview_row = dict(erow)
@@ -1482,11 +1497,11 @@ elif dept_idx == 3:
 
                 mc1, mc2 = st.columns(2)
                 with mc1:
-                    if st.button(t["mgr_show_card_btn"], key="mgr_show_single_card_btn"):
+                    if st.button(t["mgr_show_card_btn"], key=f"mgr_show_single_card_btn_{ek}"):
                         st.session_state.show_mgr_card = True
                         st.rerun()
                 with mc2:
-                    if st.session_state.show_mgr_card and st.button(t["mgr_hide_card_btn"], key="mgr_hide_single_card_btn"):
+                    if st.session_state.show_mgr_card and st.button(t["mgr_hide_card_btn"], key=f"mgr_hide_single_card_btn_{ek}"):
                         st.session_state.show_mgr_card = False
                         st.rerun()
 
@@ -1555,6 +1570,7 @@ elif dept_idx == 3:
                     ))
                     conn.commit()
                     st.session_state.current_ticket_id = new_mgr_tid
+                    st.session_state.mgr_last_picked_tid = new_mgr_tid
                     st.success(t["mgr_created_msg"].format(tid=new_mgr_tid, stage=add_stage_lbl))
                     st.rerun()
 
