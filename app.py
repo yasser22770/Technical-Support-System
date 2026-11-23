@@ -17,7 +17,7 @@ TECH_OPTIONS = [
     "فني آخر (اكتب الاسم)",
 ]
 
-conn = sqlite3.connect("enterprise_helpdesk_mgr_full_v1.db", check_same_thread=False)
+conn = sqlite3.connect("enterprise_helpdesk_dup_fix_v1.db", check_same_thread=False)
 cursor = conn.cursor()
 
 cursor.execute("""
@@ -474,7 +474,7 @@ TEXTS = {
         "chart_dec": "#### 📈 توزيع التذاكر حسب القرار",
         "mgr_all_inv_sec": "#### 🧾 فاتورة الإدارة الموحدة لكل العملاء (فاتورة واحدة)",
         "mgr_all_inv_show": "🧾 عرض فاتورة كل العملاء",
-        "mgr_all_inv_hide": "✖️ إخفاء الفاتورة",
+        "mgr_all_inv_hide": "✖️ إخفاء فاتورة كل العملاء",
         "mgr_add_sec": "#### ➕ إضافة تذكرة جديدة وتوجيهها لأي قسم مباشرة",
         "mgr_target_stage": "القسم المبدئي للتذكرة",
         "mgr_decision_lbl": "القرار / التشخيص",
@@ -492,7 +492,7 @@ TEXTS = {
         "mgr_preview_type": "نوع الفاتورة للمعاينة / الطباعة للإدارة:",
         "mgr_preview_opts": ["فاتورة صيانة ودفع", "فاتورة متابعة (بدون حساب)"],
         "mgr_show_card_btn": "🧾 عرض فاتورة التذكرة بالشكل الجديد",
-        "mgr_hide_card_btn": "✖️ إخفاء الفاتورة",
+        "mgr_hide_card_btn": "✖️ إخفاء فاتورة التذكرة",
         "search_lbl": "🔎 بحث برقم التذكرة أو اسم العميل أو موظف الاستقبال أو رقم الجوال أو S/N",
         "filt_dept": "فلترة بالقسم",
         "filt_pay": "فلترة بالدفع",
@@ -644,7 +644,7 @@ TEXTS = {
         "chart_dec": "#### 📈 Tickets by Decision",
         "mgr_all_inv_sec": "#### 🧾 Single Manager Invoice for All Customers",
         "mgr_all_inv_show": "🧾 Show All Customers Invoice",
-        "mgr_all_inv_hide": "✖️ Hide Invoice",
+        "mgr_all_inv_hide": "✖️ Hide All Customers Invoice",
         "mgr_add_sec": "#### ➕ Create New Ticket & Route to Any Department",
         "mgr_target_stage": "Initial Department",
         "mgr_decision_lbl": "Decision / Diagnosis",
@@ -662,7 +662,7 @@ TEXTS = {
         "mgr_preview_type": "Invoice Type for Management Preview / Print:",
         "mgr_preview_opts": ["Service & Payment Invoice", "Tracking Receipt (No Billing)"],
         "mgr_show_card_btn": "🧾 Show Ticket Invoice in New Layout",
-        "mgr_hide_card_btn": "✖️ Hide Invoice",
+        "mgr_hide_card_btn": "✖️ Hide Ticket Invoice",
         "search_lbl": "🔎 Search by Ticket ID, Customer, Receptionist, Mobile, or S/N",
         "filt_dept": "Filter by Stage",
         "filt_pay": "Filter by Payment",
@@ -1048,11 +1048,11 @@ if dept_idx == 0:
 
             tc1, tc2 = st.columns(2)
             with tc1:
-                if st.button(t["show_track_card_btn"], type="primary"):
+                if st.button(t["show_track_card_btn"], type="primary", key="rec_show_card"):
                     st.session_state.show_tracking_card = True
                     st.rerun()
             with tc2:
-                if st.session_state.show_tracking_card and st.button(t["hide_track_card_btn"]):
+                if st.session_state.show_tracking_card and st.button(t["hide_track_card_btn"], key="rec_hide_card"):
                     st.session_state.show_tracking_card = False
                     st.rerun()
 
@@ -1294,11 +1294,11 @@ elif dept_idx == 2:
 
             b_act1, b_act2 = st.columns(2)
             with b_act1:
-                if st.button(t["print_btn"]):
+                if st.button(t["print_btn"], key="bill_show_card"):
                     st.session_state.show_invoice_panel = True
                     st.rerun()
             with b_act2:
-                if st.session_state.show_invoice_panel and st.button(t["hide_print_btn"]):
+                if st.session_state.show_invoice_panel and st.button(t["hide_print_btn"], key="bill_hide_card"):
                     st.session_state.show_invoice_panel = False
                     st.rerun()
 
@@ -1371,11 +1371,11 @@ elif dept_idx == 3:
             with st.container(border=True):
                 ac_b1, ac_b2 = st.columns(2)
                 with ac_b1:
-                    if st.button(t["mgr_all_inv_show"], type="primary"):
+                    if st.button(t["mgr_all_inv_show"], type="primary", key="mgr_show_all_inv_btn"):
                         st.session_state.show_mgr_all_invoice = True
                         st.rerun()
                 with ac_b2:
-                    if st.session_state.show_mgr_all_invoice and st.button(t["mgr_all_inv_hide"]):
+                    if st.session_state.show_mgr_all_invoice and st.button(t["mgr_all_inv_hide"], key="mgr_hide_all_inv_btn"):
                         st.session_state.show_mgr_all_invoice = False
                         st.rerun()
 
@@ -1430,7 +1430,7 @@ elif dept_idx == 3:
                 ed_dec = st.text_input(t["mgr_decision_lbl"], value=str(erow.get("decision") or ""), key="ed_dec")
                 ed_notes = st.text_area(t["mgr_notes_lbl"], value=str(erow.get("tech_notes") or ""), key="ed_notes")
 
-                if st.button(t["mgr_save_edit_btn"], type="primary"):
+                if st.button(t["mgr_save_edit_btn"], type="primary", key="mgr_save_edit_submit"):
                     mgr_hist = append_history(
                         erow.get("status_history", "[]"),
                         t["depts"][3],
@@ -1482,11 +1482,11 @@ elif dept_idx == 3:
 
                 mc1, mc2 = st.columns(2)
                 with mc1:
-                    if st.button(t["mgr_show_card_btn"]):
+                    if st.button(t["mgr_show_card_btn"], key="mgr_show_single_card_btn"):
                         st.session_state.show_mgr_card = True
                         st.rerun()
                 with mc2:
-                    if st.session_state.show_mgr_card and st.button(t["mgr_hide_card_btn"]):
+                    if st.session_state.show_mgr_card and st.button(t["mgr_hide_card_btn"], key="mgr_hide_single_card_btn"):
                         st.session_state.show_mgr_card = False
                         st.rerun()
 
@@ -1522,7 +1522,7 @@ elif dept_idx == 3:
                 add_issue = st.text_input(t["init_note"], "وصف المشكلة من العميل", key="add_issue")
                 add_dec = st.text_input(t["mgr_decision_lbl"], "إصلاح عطل / استبدال قطعة", key="add_dec")
 
-                if st.button(t["mgr_create_btn"]):
+                if st.button(t["mgr_create_btn"], key="mgr_create_submit"):
                     new_mgr_tid = generate_unique_ticket_id()
                     add_stage_db = {
                         "الاستقبال": "Reception", "الصيانة": "Maintenance", "الحساب": "Billing",
@@ -1588,17 +1588,17 @@ elif dept_idx == 3:
             del_choice = st.selectbox(t["pick_del"], mgr_labels)
             del_id = del_choice.split(" | ")[0].strip()
 
-            if st.button(t["del_btn"]):
+            if st.button(t["del_btn"], key="mgr_del_btn"):
                 cursor.execute("DELETE FROM tickets WHERE ticket_id = ?", (del_id,))
                 conn.commit()
                 st.warning(t["del_msg"].format(tid=del_id))
                 st.rerun()
 
-            if st.button(t["add_demo"]):
+            if st.button(t["add_demo"], key="mgr_add_demo_btn"):
                 load_demo_data()
                 st.rerun()
 
-            if st.button(t["clear_all"]):
+            if st.button(t["clear_all"], key="mgr_clear_all_btn"):
                 cursor.execute("DELETE FROM tickets")
                 conn.commit()
                 st.rerun()
