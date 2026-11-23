@@ -1,28 +1,61 @@
 import os
 import sqlite3
 from datetime import datetime, timedelta
-from flask import (
-    Flask, render_template, request, redirect,
-    url_for, flash, send_from_directory
+import pandas as pd
+import streamlit as st
+
+# إعداد الصفحة
+st.set_page_config(
+    page_title="IT Helpdesk & Knowledge Base Lab",
+    page_icon="🛠️",
+    layout="wide",
+    initial_sidebar_state="expanded",
 )
-from werkzeug.utils import secure_filename
 
-app = Flask(__name__)
-app.secret_key = "it_helpdesk_lab_secret_key"
+# تنسيق الواجهة العربية (RTL) مع الحفاظ على اتجاه الأكواد البرمجية (LTR)
+st.markdown(
+    """
+    <style>
+    [data-testid="stAppViewContainer"], [data-testid="stSidebar"] {
+        direction: rtl;
+        text-align: right;
+    }
+    pre, code {
+        direction: ltr !important;
+        text-align: left !important;
+    }
+    .stTabs [data-baseweb="tab-list"] {
+        gap: 8px;
+    }
+    .sla-badge-ok {
+        background-color: #d1e7dd;
+        color: #0f5132;
+        padding: 3px 8px;
+        border-radius: 6px;
+        font-size: 0.85rem;
+        font-weight: 600;
+    }
+    .sla-badge-late {
+        background-color: #f8d7da;
+        color: #842029;
+        padding: 3px 8px;
+        border-radius: 6px;
+        font-size: 0.85rem;
+        font-weight: 600;
+    }
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
 
-BASE_DIR = os.path.abspath(os.path.dirname(__file__))
-DB_PATH = os.path.join(BASE_DIR, "helpdesk.db")
-UPLOAD_FOLDER = os.path.join(BASE_DIR, "uploads")
-ALLOWED_EXTENSIONS = {"txt", "log", "png", "jpg", "jpeg", "pdf"}
-
-os.makedirs(UPLOAD_FOLDER, exist_ok=True)
-app.config["UPLOAD_FOLDER"] = UPLOAD_FOLDER
+DB_PATH = "helpdesk_streamlit.db"
+ADMIN_PIN = "1234"
 
 SLA_HOURS = {
-    "عاجل (Urgent)": 2,
-    "مرتفع (High)": 4,
-    "متوسط (Medium)": 24,
-    "منخفض (Low)": 72,
+    "عاجل (Urgent - ساعتان)": 2,
+    "مرتفع (High - 4 ساعات)": 4,
+    "متوسط (Medium - 24 ساعة)": 24,
+    "منخفض (Low - 72 ساعة)": 72,
 }
 
 CATEGORIES = [
@@ -33,18 +66,14 @@ CATEGORIES = [
 ]
 
 
-def get_db():
-    conn = sqlite3.connect(DB_PATH)
+def get_conn():
+    conn = sqlite3.connect(DB_PATH, check_same_thread=False)
     conn.row_factory = sqlite3.Row
     return conn
 
 
-def allowed_file(filename):
-    return "." in filename and filename.rsplit(".", 1)[1].lower() in ALLOWED_EXTENSIONS
-
-
 def init_db():
-    conn = get_db()
+    conn = get_conn()
     cur = conn.cursor()
 
     cur.execute("""
@@ -56,22 +85,22 @@ def init_db():
             priority TEXT NOT NULL,
             status TEXT NOT NULL DEFAULT 'جديدة',
             requester TEXT NOT NULL,
+            mobile TEXT NOT NULL,
             assignee TEXT DEFAULT 'غير معيّن',
-            attachment TEXT,
+            attachment_name TEXT,
+            attachment_content TEXT,
             created_at TEXT NOT NULL,
             sla_deadline TEXT NOT NULL
         )
     """)
 
     cur.execute("""
-        CREATE TABLE IF NOT EXISTS ticket_comments (
+        CREATE TABLE IF NOT EXISTS ticket_notes (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             ticket_id INTEGER NOT NULL,
             author TEXT NOT NULL,
-            role TEXT NOT NULL,
-            comment TEXT NOT NULL,
-            created_at TEXT NOT NULL,
-            FOREIGN KEY (ticket_id) REFERENCES tickets (id)
+            note TEXT NOT NULL,
+            created_at TEXT NOT NULL
         )
     """)
 
@@ -98,73 +127,69 @@ def init_db():
         )
     """)
 
-    # تعبئة بيانات أولية عند تشغيل النظام لأول مرة
-    cur.execute("SELECT COUNT(*) FROM kb_articles")
-    if cur.fetchone()[0] == 0:
-        now = datetime.now().strftime("%Y-%m-%d %H:%M")
-        sample_kb = [
+    # بيانات أولية تلقائية للمعاينة
+    if cur.execute("SELECT COUNT(*) FROM kb_articles").fetchone()[0] == 0:
+        now_str = datetime.now().strftime("%Y-%m-%d %H:%M")
+        articles = [
             (
-                "حل مشكلة بطء نظام Windows واستهلاك الذاكرة المرتفع",
+                "إصلاح بطء نظام Windows واستهلاك الذاكرة المرتفع",
                 "Software & OS - البرمجيات والأنظمة",
-                "تأخر استجابة البرامج، بطء فتح القوائم، وارتفاع استهلاك المعالج أو الذاكرة.",
+                "تأخر استجابة التطبيقات وارتفاع استهلاك الذاكرة (RAM).",
                 "1. افتح مدير المهام عبر الضغط على Ctrl + Shift + Esc.\n"
-                "2. رتب العمليات حسب استهلاك الذاكرة (Memory) وأغلق التطبيقات غير الضرورية.\n"
+                "2. رتب العمليات حسب الذاكرة وأغلق البرامج غير المستخدمة.\n"
                 "3. شغّل سكربت التشخيص المرفق مع خيار تنظيف الملفات المؤقتة (--clean).\n"
                 "4. أعد تشغيل الجهاز للتحقق من استقرار الأداء.",
-                now,
+                now_str,
             ),
             (
-                "استكشاف أعطال اتصال Wi-Fi وظهور علامة No Internet",
+                "استكشاف أعطال Wi-Fi وظهور علامة No Internet",
                 "Networking - الشبكات والإنترنت",
-                "اتصال الجهاز بالشبكة اللاسلكية مع تعذر فتح المواقع أو الأنظمة الداخلية.",
-                "1. تأكد من إيقاف وضع الطيران (Airplane Mode) ثم افصل الشبكة وأعد الاتصال.\n"
-                "2. افتح موجه الأوامر (CMD) ونفّذ الأمر: ipconfig /release ثم ipconfig /renew.\n"
-                "3. نفّذ الأمر ipconfig /flushdns لتحديث ذاكرة أسماء النطاقات.\n"
-                "4. إذا استمرت المشكلة، أرفق تقرير diagnostics.py في تذكرة دعم جديدة.",
-                now,
+                "اتصال الجهاز بالشبكة مع تعذر فتح المواقع أو الأنظمة الداخلية.",
+                "1. فعّل وضع الطيران لمدة 10 ثوانٍ ثم أوقفه.\n"
+                "2. افتح موجه الأوامر (CMD) ونفّذ: ipconfig /release ثم ipconfig /renew.\n"
+                "3. نفّذ الأمر ipconfig /flushdns لتحديث ذاكرة DNS.\n"
+                "4. في حال استمرار العطل، أرفق تقرير diagnostics.py داخل تذكرة جديدة.",
+                now_str,
             ),
             (
                 "فك قفل حساب الموظف في Active Directory وإعادة تعيين كلمة المرور",
                 "Access & AD - الصلاحيات والحسابات",
-                "ظهور رسالة The referenced account is currently locked out عند تسجيل الدخول.",
-                "1. تحقق من هوية الموظف عبر الرقم الوظيفي.\n"
-                "2. افتح أداة Active Directory Users and Computers (أو صفحة محاكي AD في النظام).\n"
-                "3. ابحث عن اسم المستخدم وأزل علامة التحديد من خيار Unlock account.\n"
-                "4. قم بإعادة تعيين كلمة المرور مع تفعيل خيار تغييرها عند أول تسجيل دخول.",
-                now,
+                "ظهور رسالة Account Locked Out عند محاولة تسجيل الدخول.",
+                "1. تحقق من هوية الموظف ورقم الجوال المسجل.\n"
+                "2. افتح وحدة Active Directory Users and Computers أو تبويب محاكي AD.\n"
+                "3. نفّذ إجراء فك القفل (Unlock Account) وأعد تعيين كلمة المرور.\n"
+                "4. اطلب من الموظف تغيير كلمة المرور فور تسجيل الدخول.",
+                now_str,
             ),
             (
-                "إصلاح توقف الطابعة الشبكية وتعليق المستندات في قائمة الانتظار",
+                "حل مشكلة توقف الطابعة الشبكية وتعليق المستندات",
                 "Hardware - أعطال الأجهزة",
-                "بقاء المستندات في حالة Printing أو Error وعدم خروج الورق من الطابعة.",
-                "1. افتح نافذة الخدمات (services.msc) وابحث عن خدمة Print Spooler.\n"
-                "2. أوقف الخدمة مؤقتاً (Stop).\n"
-                "3. امسح الملفات العالقة داخل المسار C:\\Windows\\System32\\spool\\PRINTERS.\n"
-                "4. أعد تشغيل خدمة Print Spooler (Start) وأرسل صفحة اختبار.",
-                now,
+                "بقاء المستندات في قائمة الانتظار بحالة Printing أو Error.",
+                "1. افتح نافذة الخدمات (services.msc) وأوقف خدمة Print Spooler.\n"
+                "2. امسح الملفات العالقة داخل المسار C:\\Windows\\System32\\spool\\PRINTERS.\n"
+                "3. أعد تشغيل خدمة Print Spooler وأرسل صفحة اختبار.",
+                now_str,
             ),
         ]
         cur.executemany(
             "INSERT INTO kb_articles (title, category, symptoms, steps, created_at) VALUES (?, ?, ?, ?, ?)",
-            sample_kb,
+            articles,
         )
 
-    cur.execute("SELECT COUNT(*) FROM ad_users")
-    if cur.fetchone()[0] == 0:
-        now = datetime.now().strftime("%Y-%m-%d %H:%M")
-        sample_users = [
-            ("sara.ali", "سارة علي", "الموارد البشرية", "نشط", 1, f"تم قفل الحساب بسبب محاولات خاطئة ({now})"),
-            ("ahmed.hassan", "أحمد حسن", "المالية", "نشط", 0, f"إنشاء الحساب وتعيين المجلد المشترك ({now})"),
-            ("it.agent", "خالد المنصور", "تقنية المعلومات", "نشط", 0, f"صلاحيات Domain Admin ({now})"),
-            ("omar.trainee", "عمر سامي", "المبيعات", "معطّل", 0, f"إيقاف مؤقت لحين استلام العهدة ({now})"),
+    if cur.execute("SELECT COUNT(*) FROM ad_users").fetchone()[0] == 0:
+        now_str = datetime.now().strftime("%Y-%m-%d %H:%M")
+        users = [
+            ("sara.ali", "سارة علي", "الموارد البشرية", "نشط", 1, f"تم قفل الحساب بسبب محاولات خاطئة ({now_str})"),
+            ("ahmed.hassan", "أحمد حسن", "المالية", "نشط", 0, f"إنشاء الحساب وتعيين المجلد المشترك ({now_str})"),
+            ("it.agent", "خالد المنصور", "تقنية المعلومات", "نشط", 0, f"صلاحيات الدعم الفني ({now_str})"),
+            ("omar.samir", "عمر سمير", "المبيعات", "معطّل", 0, f"إيقاف مؤقت لحين استلام العهدة ({now_str})"),
         ]
         cur.executemany(
             "INSERT INTO ad_users (username, full_name, department, status, locked, last_action) VALUES (?, ?, ?, ?, ?, ?)",
-            sample_users,
+            users,
         )
 
-    cur.execute("SELECT COUNT(*) FROM tickets")
-    if cur.fetchone()[0] == 0:
+    if cur.execute("SELECT COUNT(*) FROM tickets").fetchone()[0] == 0:
         now_dt = datetime.now()
         now_str = now_dt.strftime("%Y-%m-%d %H:%M")
         sample_tickets = [
@@ -172,22 +197,26 @@ def init_db():
                 "قفل حساب الموظفة سارة علي وعدم القدرة على الدخول للنظام",
                 "تظهر رسالة Account Locked Out على جهاز WIN10-HR02 منذ الصباح.",
                 "Access & AD - الصلاحيات والحسابات",
-                "مرتفع (High)",
+                "مرتفع (High - 4 ساعات)",
                 "قيد المعالجة",
-                "سارة علي (sara.ali)",
-                "خالد المنصور (it.agent)",
+                "سارة علي",
+                "0501234567",
+                "خالد المنصور",
+                None,
                 None,
                 now_str,
                 (now_dt + timedelta(hours=4)).strftime("%Y-%m-%d %H:%M"),
             ),
             (
                 "انقطاع الاتصال بالشبكة الداخلية في قسم المالية",
-                "الأجهزة تحصل على عنوان IP يبدأ بـ 169.254 ولا تصل إلى خادم DHCP.",
+                "الجهاز يحصل على IP يبدأ بـ 169.254 ولا يصل إلى خادم DHCP.",
                 "Networking - الشبكات والإنترنت",
-                "عاجل (Urgent)",
+                "عاجل (Urgent - ساعتان)",
                 "جديدة",
-                "أحمد حسن (ahmed.hassan)",
+                "أحمد حسن",
+                "0559876543",
                 "غير معيّن",
+                None,
                 None,
                 now_str,
                 (now_dt + timedelta(hours=2)).strftime("%Y-%m-%d %H:%M"),
@@ -195,8 +224,8 @@ def init_db():
         ]
         cur.executemany(
             """INSERT INTO tickets
-               (title, description, category, priority, status, requester, assignee, attachment, created_at, sla_deadline)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+               (title, description, category, priority, status, requester, mobile, assignee, attachment_name, attachment_content, created_at, sla_deadline)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             sample_tickets,
         )
 
@@ -204,239 +233,380 @@ def init_db():
     conn.close()
 
 
-@app.context_processor
-def utility_processor():
-    def is_sla_breached(deadline_str, status):
-        if status == "مغلقة":
-            return False
-        deadline = datetime.strptime(deadline_str, "%Y-%m-%d %H:%M")
-        return datetime.now() > deadline
+init_db()
 
-    return dict(is_sla_breached=is_sla_breached, categories=CATEGORIES, sla_hours=SLA_HOURS)
+# ================= الشريط الجانبي (تبديل الدور للمعاينة) =================
+with st.sidebar:
+    st.title("🛠️ IT Helpdesk Lab")
+    st.caption("نظام إدارة التذاكر وقاعدة المعرفة ومحاكي AD")
+    st.divider()
 
-
-@app.route("/")
-def index():
-    conn = get_db()
-    status_filter = request.args.get("status", "")
-    category_filter = request.args.get("category", "")
-
-    query = "SELECT * FROM tickets WHERE 1=1"
-    params = []
-    if status_filter:
-        query += " AND status = ?"
-        params.append(status_filter)
-    if category_filter:
-        query += " AND category = ?"
-        params.append(category_filter)
-    query += " ORDER BY id DESC"
-
-    tickets = conn.execute(query, params).fetchall()
-    all_tickets = conn.execute("SELECT * FROM tickets").fetchall()
-    kb_count = conn.execute("SELECT COUNT(*) FROM kb_articles").fetchone()[0]
-    locked_users = conn.execute("SELECT COUNT(*) FROM ad_users WHERE locked = 1").fetchone()[0]
-    conn.close()
-
-    stats = {
-        "total": len(all_tickets),
-        "open": sum(1 for t in all_tickets if t["status"] != "مغلقة"),
-        "urgent": sum(1 for t in all_tickets if "عاجل" in t["priority"] and t["status"] != "مغلقة"),
-        "kb_count": kb_count,
-        "locked_users": locked_users,
-    }
-    return render_template(
-        "index.html",
-        tickets=tickets,
-        stats=stats,
-        status_filter=status_filter,
-        category_filter=category_filter,
+    role_mode = st.radio(
+        "وضع الاستخدام:",
+        ["بوابة الموظف (إرسال تذكرة وبحث)", "لوحة فني الدعم والإدارة (IT Support)"],
     )
 
+    is_admin = False
+    if role_mode == "لوحة فني الدعم والإدارة (IT Support)":
+        pin_input = st.text_input("رمز دخول فني الدعم (PIN)", type="password", placeholder="أدخل الرمز")
+        if pin_input == ADMIN_PIN:
+            is_admin = True
+            st.success("تم تفعيل صلاحيات فني الدعم")
+        else:
+            st.info(f"للمعاينة والتقييم، استخدم رمز الدخول: `{ADMIN_PIN}`")
 
-@app.route("/tickets/create", methods=["POST"])
-def create_ticket():
-    title = request.form["title"].strip()
-    description = request.form["description"].strip()
-    category = request.form["category"]
-    priority = request.form["priority"]
-    requester = request.form["requester"].strip()
-
-    attachment_name = None
-    file = request.files.get("attachment")
-    if file and file.filename and allowed_file(file.filename):
-        safe_name = secure_filename(file.filename)
-        attachment_name = f"{datetime.now().strftime('%Y%m%d%H%M%S')}_{safe_name}"
-        file.save(os.path.join(app.config["UPLOAD_FOLDER"], attachment_name))
-
-    now_dt = datetime.now()
-    created_at = now_dt.strftime("%Y-%m-%d %H:%M")
-    deadline = (now_dt + timedelta(hours=SLA_HOURS.get(priority, 24))).strftime("%Y-%m-%d %H:%M")
-
-    conn = get_db()
-    conn.execute(
-        """INSERT INTO tickets
-           (title, description, category, priority, status, requester, attachment, created_at, sla_deadline)
-           VALUES (?, ?, ?, ?, 'جديدة', ?, ?, ?, ?)""",
-        (title, description, category, priority, requester, attachment_name, created_at, deadline),
-    )
-    conn.commit()
-    conn.close()
-    flash("تم إنشاء التذكرة بنجاح وتحديد موعد SLA تلقائياً.", "success")
-    return redirect(url_for("index"))
-
-
-@app.route("/tickets/<int:ticket_id>", methods=["GET", "POST"])
-def ticket_detail(ticket_id):
-    conn = get_db()
-    ticket = conn.execute("SELECT * FROM tickets WHERE id = ?", (ticket_id,)).fetchone()
-    if not ticket:
-        conn.close()
-        flash("التذكرة غير موجودة.", "danger")
-        return redirect(url_for("index"))
-
-    if request.method == "POST":
-        action = request.form.get("action")
-        now_str = datetime.now().strftime("%Y-%m-%d %H:%M")
-
-        if action == "update_meta":
-            new_status = request.form["status"]
-            new_assignee = request.form["assignee"].strip() or "غير معيّن"
-            conn.execute(
-                "UPDATE tickets SET status = ?, assignee = ? WHERE id = ?",
-                (new_status, new_assignee, ticket_id),
-            )
-            conn.execute(
-                "INSERT INTO ticket_comments (ticket_id, author, role, comment, created_at) VALUES (?, ?, ?, ?, ?)",
-                (ticket_id, new_assignee, "النظام", f"تم تحديث حالة التذكرة إلى ({new_status})", now_str),
-            )
-            flash("تم تحديث بيانات التذكرة.", "info")
-
-        elif action == "add_comment":
-            author = request.form["author"].strip()
-            role = request.form["role"]
-            comment = request.form["comment"].strip()
-            if comment:
-                conn.execute(
-                    "INSERT INTO ticket_comments (ticket_id, author, role, comment, created_at) VALUES (?, ?, ?, ?, ?)",
-                    (ticket_id, author, role, comment, now_str),
-                )
-                flash("تمت إضافة الرد بنجاح.", "success")
-
-        elif action == "promote_to_kb":
-            kb_title = request.form["kb_title"].strip()
-            kb_steps = request.form["kb_steps"].strip()
-            conn.execute(
-                "INSERT INTO kb_articles (title, category, symptoms, steps, created_at) VALUES (?, ?, ?, ?, ?)",
-                (kb_title, ticket["category"], ticket["description"], kb_steps, now_str),
-            )
-            flash("تم نشر الحل كدليل إصلاح (SOP) في قاعدة المعرفة!", "success")
-
-        conn.commit()
-        conn.close()
-        return redirect(url_for("ticket_detail", ticket_id=ticket_id))
-
-    comments = conn.execute(
-        "SELECT * FROM ticket_comments WHERE ticket_id = ? ORDER BY id ASC", (ticket_id,)
-    ).fetchall()
-    conn.close()
-    return render_template("ticket_detail.html", ticket=ticket, comments=comments)
-
-
-@app.route("/uploads/<filename>")
-def download_file(filename):
-    return send_from_directory(app.config["UPLOAD_FOLDER"], filename, as_attachment=True)
-
-
-@app.route("/kb", methods=["GET", "POST"])
-def knowledge_base():
-    conn = get_db()
-    if request.method == "POST":
-        title = request.form["title"].strip()
-        category = request.form["category"]
-        symptoms = request.form["symptoms"].strip()
-        steps = request.form["steps"].strip()
-        now_str = datetime.now().strftime("%Y-%m-%d %H:%M")
-
-        conn.execute(
-            "INSERT INTO kb_articles (title, category, symptoms, steps, created_at) VALUES (?, ?, ?, ?, ?)",
-            (title, category, symptoms, steps, now_str),
+    st.divider()
+    st.markdown("**أداة التشخيص السريع للعميل**")
+    if os.path.exists("diagnostics.py"):
+        with open("diagnostics.py", "r", encoding="utf-8") as f:
+            diag_code = f.read()
+        st.download_button(
+            label="📥 تحميل سكربت diagnostics.py",
+            data=diag_code,
+            file_name="diagnostics.py",
+            mime="text/x-python",
+            use_container_width=True,
         )
-        conn.commit()
-        flash("تمت إضافة المقال إلى قاعدة المعرفة.", "success")
-        return redirect(url_for("knowledge_base"))
 
-    search = request.args.get("q", "").strip()
-    cat = request.args.get("category", "")
-    query = "SELECT * FROM kb_articles WHERE 1=1"
-    params = []
-    if search:
-        query += " AND (title LIKE ? OR symptoms LIKE ? OR steps LIKE ?)"
-        params.extend([f"%{search}%", f"%{search}%", f"%{search}%"])
-    if cat:
-        query += " AND category = ?"
-        params.append(cat)
-    query += " ORDER BY id DESC"
+# ================= تحميل الإحصائيات =================
+conn = get_conn()
+tickets_df = pd.read_sql_query("SELECT * FROM tickets ORDER BY id DESC", conn)
+kb_df = pd.read_sql_query("SELECT * FROM kb_articles ORDER BY id DESC", conn)
+ad_df = pd.read_sql_query("SELECT * FROM ad_users ORDER BY id ASC", conn)
+conn.close()
 
-    articles = conn.execute(query, params).fetchall()
-    conn.close()
-    return render_template("kb.html", articles=articles, search=search, cat=cat)
+# مؤشرات الأداء العلوية
+c1, c2, c3, c4 = st.columns(4)
+c1.metric("إجمالي التذاكر", len(tickets_df))
+c2.metric("التذاكر المفتوحة", int((tickets_df["status"] != "مغلقة").sum()))
+c3.metric("تذاكر عاجلة مفتوحة", int(((tickets_df["priority"].str.contains("عاجل")) & (tickets_df["status"] != "مغلقة")).sum()))
+c4.metric("أدلة المعرفة / حسابات مقفلة", f"{len(kb_df)} دليل / {int((ad_df['locked'] == 1).sum())} مقفل")
 
+st.divider()
 
-@app.route("/ad-lab", methods=["GET", "POST"])
-def ad_lab():
-    conn = get_db()
-    if request.method == "POST":
-        action = request.form.get("action")
-        now_str = datetime.now().strftime("%Y-%m-%d %H:%M")
+# ================= التبويبات الرئيسية =================
+tab_tickets, tab_new, tab_kb, tab_ad = st.tabs(
+    [
+        "📋 التذاكر والمتابعة",
+        "➕ فتح تذكرة جديدة",
+        "📚 قاعدة المعرفة (SOPs)",
+        "🖥️ محاكي Active Directory",
+    ]
+)
 
-        if action == "create_user":
-            username = request.form["username"].strip().lower()
-            full_name = request.form["full_name"].strip()
-            department = request.form["department"].strip()
-            try:
+# ---------------------------------------------------------
+# 1. تبويب التذاكر والمتابعة
+# ---------------------------------------------------------
+with tab_tickets:
+    f1, f2 = st.columns(2)
+    with f1:
+        filter_cat = st.selectbox("تصفية حسب التصنيف", ["الكل"] + CATEGORIES)
+    with f2:
+        filter_status = st.selectbox("تصفية حسب الحالة", ["الكل", "جديدة", "قيد المعالجة", "مغلقة"])
+
+    filtered_tickets = tickets_df.copy()
+    if filter_cat != "الكل":
+        filtered_tickets = filtered_tickets[filtered_tickets["category"] == filter_cat]
+    if filter_status != "الكل":
+        filtered_tickets = filtered_tickets[filtered_tickets["status"] == filter_status]
+
+    if filtered_tickets.empty:
+        st.info("لا توجد تذاكر مطابقة لخيارات التصفية الحالية.")
+    else:
+        display_cols = filtered_tickets[["id", "title", "category", "priority", "status", "requester", "mobile", "assignee", "sla_deadline"]].copy()
+        display_cols.columns = ["رقم", "العنوان", "التصنيف", "الأولوية", "الحالة", "مقدم الطلب", "الجوال", "الفني المسؤول", "موعد SLA"]
+        st.dataframe(display_cols, use_container_width=True, hide_index=True)
+
+        st.subheader("🔍 تفاصيل التذكرة والإجراءات")
+        selected_id = st.selectbox(
+            "اختر رقم التذكرة لعرض تفاصيلها أو تحديثها:",
+            filtered_tickets["id"].tolist(),
+            format_func=lambda x: f"#{x} - {filtered_tickets[filtered_tickets['id'] == x]['title'].values[0]}",
+        )
+
+        ticket_row = filtered_tickets[filtered_tickets["id"] == selected_id].iloc[0]
+        deadline_dt = datetime.strptime(ticket_row["sla_deadline"], "%Y-%m-%d %H:%M")
+        is_overdue = (ticket_row["status"] != "مغلقة") and (datetime.now() > deadline_dt)
+
+        col_info, col_manage = st.columns([2, 1])
+        with col_info:
+            st.markdown(f"### #{ticket_row['id']} — {ticket_row['title']}")
+            st.caption(
+                f"**مقدم الطلب:** {ticket_row['requester']} | **الجوال:** {ticket_row['mobile']} | "
+                f"**التصنيف:** {ticket_row['category']} | **تاريخ الفتح:** {ticket_row['created_at']}"
+            )
+            if is_overdue:
+                st.markdown(f"<span class='sla-badge-late'>⚠️ متجاوزة لوقت SLA ({ticket_row['sla_deadline']})</span>", unsafe_allow_html=True)
+            else:
+                st.markdown(f"<span class='sla-badge-ok'>⏱️ موعد SLA المستهدف: {ticket_row['sla_deadline']}</span>", unsafe_allow_html=True)
+
+            st.write("")
+            st.info(ticket_row["description"])
+
+            if ticket_row["attachment_name"]:
+                with st.expander(f"📎 المرفق: {ticket_row['attachment_name']}"):
+                    st.code(ticket_row["attachment_content"] or "ملف مرفق", language="text")
+
+            # سجل الملاحظات والردود
+            conn = get_conn()
+            notes = conn.execute("SELECT * FROM ticket_notes WHERE ticket_id = ? ORDER BY id ASC", (int(selected_id),)).fetchall()
+            conn.close()
+
+            st.markdown("**سجل المتابعة والحلول:**")
+            if not notes:
+                st.caption("لا توجد ملاحظات مسجلة بعد.")
+            for n in notes:
+                st.markdown(f"- **{n['author']}** *({n['created_at']})*: {n['note']}")
+
+            with st.form(f"note_form_{selected_id}"):
+                note_author = st.text_input("الاسم", value="خالد المنصور (فني دعم)" if is_admin else ticket_row["requester"])
+                note_text = st.text_area("إضافة تحديث أو خطوة حل", height=80)
+                if st.form_submit_button("إرسال التحديث"):
+                    if note_text.strip():
+                        conn = get_conn()
+                        conn.execute(
+                            "INSERT INTO ticket_notes (ticket_id, author, note, created_at) VALUES (?, ?, ?, ?)",
+                            (int(selected_id), note_author.strip(), note_text.strip(), datetime.now().strftime("%Y-%m-%d %H:%M")),
+                        )
+                        conn.commit()
+                        conn.close()
+                        st.rerun()
+
+        with col_manage:
+            if is_admin:
+                st.markdown("#### ⚙️ تحديث حالة التذكرة")
+                with st.form(f"update_ticket_{selected_id}"):
+                    new_status = st.selectbox(
+                        "الحالة",
+                        ["جديدة", "قيد المعالجة", "مغلقة"],
+                        index=["جديدة", "قيد المعالجة", "مغلقة"].index(ticket_row["status"]),
+                    )
+                    new_assignee = st.text_input("الفني المسؤول", value=ticket_row["assignee"])
+                    if st.form_submit_button("حفظ التعديلات", use_container_width=True):
+                        conn = get_conn()
+                        conn.execute(
+                            "UPDATE tickets SET status = ?, assignee = ? WHERE id = ?",
+                            (new_status, new_assignee.strip() or "غير معيّن", int(selected_id)),
+                        )
+                        conn.commit()
+                        conn.close()
+                        st.success("تم تحديث التذكرة")
+                        st.rerun()
+
+                st.divider()
+                st.markdown("#### 📚 تحويل الحل إلى دليل SOP")
+                with st.form(f"promote_kb_{selected_id}"):
+                    sop_title = st.text_input("عنوان المقال", value=f"دليل حل: {ticket_row['title']}")
+                    sop_steps = st.text_area("خطوات الإصلاح المبسطة", placeholder="1. الخطوة الأولى...\n2. الخطوة الثانية...")
+                    if st.form_submit_button("نشر في قاعدة المعرفة", use_container_width=True):
+                        if sop_steps.strip():
+                            conn = get_conn()
+                            conn.execute(
+                                "INSERT INTO kb_articles (title, category, symptoms, steps, created_at) VALUES (?, ?, ?, ?, ?)",
+                                (
+                                    sop_title.strip(),
+                                    ticket_row["category"],
+                                    ticket_row["description"],
+                                    sop_steps.strip(),
+                                    datetime.now().strftime("%Y-%m-%d %H:%M"),
+                                ),
+                            )
+                            conn.commit()
+                            conn.close()
+                            st.success("تم نشر المقال في قاعدة المعرفة!")
+                            st.rerun()
+            else:
+                st.warning("قم بتفعيل **لوحة فني الدعم والإدارة** من القائمة الجانبية لتغيير حالة التذكرة أو نشر الحلول في قاعدة المعرفة.")
+
+# ---------------------------------------------------------
+# 2. تبويب فتح تذكرة جديدة (نموذج مبسط ومتجاوب)
+# ---------------------------------------------------------
+with tab_new:
+    st.subheader("تسجيل بلاغ أو طلب دعم فني")
+    with st.form("create_ticket_form", clear_on_submit=True):
+        col_a, col_b = st.columns(2)
+        with col_a:
+            req_name = st.text_input("اسم الموظف *", placeholder="مثال: سارة علي")
+            req_mobile = st.text_input("رقم الجوال للتواصل *", placeholder="مثال: 05XXXXXXXX")
+        with col_b:
+            t_category = st.selectbox("تصنيف المشكلة *", CATEGORIES)
+            t_priority = st.selectbox("الأولوية (SLA) *", list(SLA_HOURS.keys()))
+
+        t_title = st.text_input("عنوان المشكلة *", placeholder="وصف مختصر وواضح للعطل")
+        t_desc = st.text_area("تفاصيل المشكلة ورسائل الخطأ *", height=120)
+        uploaded_report = st.file_uploader(
+            "إرفاق تقرير التشخيص (Helpdesk_Report_*.txt) أو سجل نصي (اختياري)",
+            type=["txt", "log"],
+        )
+
+        submitted = st.form_submit_button("إرسال التذكرة", type="primary")
+        if submitted:
+            if not (req_name.strip() and req_mobile.strip() and t_title.strip() and t_desc.strip()):
+                st.error("يرجى تعبئة جميع الحقول الأساسية المطلوبة (*).")
+            else:
+                att_name = None
+                att_text = None
+                if uploaded_report is not None:
+                    att_name = uploaded_report.name
+                    att_text = uploaded_report.read().decode("utf-8", errors="replace")
+
+                now_dt = datetime.now()
+                created_str = now_dt.strftime("%Y-%m-%d %H:%M")
+                deadline_str = (now_dt + timedelta(hours=SLA_HOURS[t_priority])).strftime("%Y-%m-%d %H:%M")
+
+                conn = get_conn()
                 conn.execute(
-                    "INSERT INTO ad_users (username, full_name, department, status, locked, last_action) VALUES (?, ?, ?, 'نشط', 0, ?)",
-                    (username, full_name, department, f"تم إنشاء الحساب ({now_str})"),
+                    """INSERT INTO tickets
+                       (title, description, category, priority, status, requester, mobile, attachment_name, attachment_content, created_at, sla_deadline)
+                       VALUES (?, ?, ?, ?, 'جديدة', ?, ?, ?, ?, ?, ?)""",
+                    (
+                        t_title.strip(),
+                        t_desc.strip(),
+                        t_category,
+                        t_priority,
+                        req_name.strip(),
+                        req_mobile.strip(),
+                        att_name,
+                        att_text,
+                        created_str,
+                        deadline_str,
+                    ),
                 )
-                flash(f"تم إنشاء حساب Active Directory للمستخدم {username}.", "success")
-            except sqlite3.IntegrityError:
-                flash("اسم المستخدم موجود مسبقاً!", "danger")
+                conn.commit()
+                conn.close()
+                st.success(f"تم تسجيل التذكرة بنجاح! الموعد المستهدف للحل (SLA): {deadline_str}")
+                st.rerun()
 
-        elif action == "unlock":
-            user_id = request.form["user_id"]
-            conn.execute(
-                "UPDATE ad_users SET locked = 0, last_action = ? WHERE id = ?",
-                (f"تم فك قفل الحساب ({now_str})", user_id),
+# ---------------------------------------------------------
+# 3. تبويب قاعدة المعرفة (Knowledge Base & SOPs)
+# ---------------------------------------------------------
+with tab_kb:
+    st.subheader("📚 أدلة الإصلاح الذاتي للموظفين وفنيي الدعم (SOPs)")
+    s1, s2 = st.columns([2, 1])
+    with s1:
+        kb_search = st.text_input("ابحث في قاعدة المعرفة", placeholder="اكتب كلمة مفتاحية مثل: Wi-Fi، طابعة، بطء، قفل...")
+    with s2:
+        kb_cat_filter = st.selectbox("التصنيف", ["الكل"] + CATEGORIES, key="kb_cat")
+
+    filtered_kb = kb_df.copy()
+    if kb_cat_filter != "الكل":
+        filtered_kb = filtered_kb[filtered_kb["category"] == kb_cat_filter]
+    if kb_search.strip():
+        q = kb_search.strip().lower()
+        filtered_kb = filtered_kb[
+            filtered_kb["title"].str.lower().str.contains(q)
+            | filtered_kb["symptoms"].str.lower().str.contains(q)
+            | filtered_kb["steps"].str.lower().str.contains(q)
+        ]
+
+    for _, art in filtered_kb.iterrows():
+        with st.expander(f"📘 {art['title']}  —  [{art['category'].split(' - ')[0]}]"):
+            st.markdown(f"**الأعراض:** {art['symptoms']}")
+            st.markdown("**خطوات الحل:**")
+            st.code(art["steps"], language="text")
+            st.caption(f"تاريخ التحديث: {art['created_at']}")
+
+    if is_admin:
+        st.divider()
+        st.markdown("#### ➕ إضافة دليل إصلاح جديد")
+        with st.form("add_kb_form", clear_on_submit=True):
+            k_title = st.text_input("عنوان الدليل")
+            k_cat = st.selectbox("التصنيف", CATEGORIES, key="new_kb_cat")
+            k_symp = st.text_input("الأعراض التي تظهر للمستخدم")
+            k_steps = st.text_area("خطوات الإصلاح المرقمة", height=120)
+            if st.form_submit_button("حفظ الدليل"):
+                if k_title.strip() and k_symp.strip() and k_steps.strip():
+                    conn = get_conn()
+                    conn.execute(
+                        "INSERT INTO kb_articles (title, category, symptoms, steps, created_at) VALUES (?, ?, ?, ?, ?)",
+                        (k_title.strip(), k_cat, k_symp.strip(), k_steps.strip(), datetime.now().strftime("%Y-%m-%d %H:%M")),
+                    )
+                    conn.commit()
+                    conn.close()
+                    st.success("تمت إضافة الدليل بنجاح.")
+                    st.rerun()
+
+# ---------------------------------------------------------
+# 4. تبويب محاكي Active Directory
+# ---------------------------------------------------------
+with tab_ad:
+    st.subheader("🖥️ محاكي إدارة حسابات المستخدمين (Active Directory Lab)")
+    st.caption("محاكاة لمهام المستوى الأول (L1 Support): إنشاء الحسابات، فك القفل، وإعادة تعيين كلمات المرور على النطاق corp.local")
+
+    ad_display = ad_df.copy()
+    ad_display["username"] = ad_display["username"] + "@corp.local"
+    ad_display["locked"] = ad_display["locked"].apply(lambda x: "🔴 مقفل (Locked)" if x == 1 else "🟢 سليم")
+    ad_display.columns = ["ID", "اسم الدخول", "الاسم الكامل", "القسم", "الحالة", "حالة القفل", "آخر إجراء إداري"]
+    st.dataframe(ad_display.drop(columns=["ID"]), use_container_width=True, hide_index=True)
+
+    if is_admin:
+        col_ad1, col_ad2 = st.columns(2)
+        with col_ad1:
+            st.markdown("#### 🔧 تنفيذ إجراء على حساب موجود")
+            selected_user = st.selectbox(
+                "اختر المستخدم:",
+                ad_df["username"].tolist(),
+                format_func=lambda u: f"{u}@corp.local ({ad_df[ad_df['username'] == u]['full_name'].values[0]})",
             )
-            flash("تم فك قفل الحساب بنجاح.", "success")
+            b1, b2, b3 = st.columns(3)
+            now_str = datetime.now().strftime("%Y-%m-%d %H:%M")
 
-        elif action == "reset_password":
-            user_id = request.form["user_id"]
-            conn.execute(
-                "UPDATE ad_users SET locked = 0, last_action = ? WHERE id = ?",
-                (f"إعادة تعيين كلمة المرور + إجبار التغيير عند الدخول ({now_str})", user_id),
-            )
-            flash("تمت إعادة تعيين كلمة المرور بنجاح.", "info")
+            if b1.button("🔓 فك القفل", use_container_width=True):
+                conn = get_conn()
+                conn.execute(
+                    "UPDATE ad_users SET locked = 0, last_action = ? WHERE username = ?",
+                    (f"تم فك قفل الحساب ({now_str})", selected_user),
+                )
+                conn.commit()
+                conn.close()
+                st.rerun()
 
-        elif action == "toggle_status":
-            user_id = request.form["user_id"]
-            user = conn.execute("SELECT status FROM ad_users WHERE id = ?", (user_id,)).fetchone()
-            new_status = "معطّل" if user["status"] == "نشط" else "نشط"
-            conn.execute(
-                "UPDATE ad_users SET status = ?, last_action = ? WHERE id = ?",
-                (new_status, f"تغيير حالة الحساب إلى {new_status} ({now_str})", user_id),
-            )
-            flash(f"تم تغيير حالة الحساب إلى ({new_status}).", "warning")
+            if b2.button("🔑 إعادة تعيين كلمة المرور", use_container_width=True):
+                conn = get_conn()
+                conn.execute(
+                    "UPDATE ad_users SET locked = 0, last_action = ? WHERE username = ?",
+                    (f"إعادة تعيين كلمة المرور وإلزام التغيير ({now_str})", selected_user),
+                )
+                conn.commit()
+                conn.close()
+                st.rerun()
 
-        conn.commit()
-        conn.close()
-        return redirect(url_for("ad_lab"))
+            if b3.button("⏯️ تفعيل / تعطيل", use_container_width=True):
+                curr_st = ad_df[ad_df["username"] == selected_user]["status"].values[0]
+                nxt_st = "معطّل" if curr_st == "نشط" else "نشط"
+                conn = get_conn()
+                conn.execute(
+                    "UPDATE ad_users SET status = ?, last_action = ? WHERE username = ?",
+                    (nxt_st, f"تغيير حالة الحساب إلى {nxt_st} ({now_str})", selected_user),
+                )
+                conn.commit()
+                conn.close()
+                st.rerun()
 
-    users = conn.execute("SELECT * FROM ad_users ORDER BY id ASC").fetchall()
-    conn.close()
-    return render_template("ad_lab.html", users=users)
-
-
-if __name__ == "__main__":
-    init_db()
-    app.run(debug=True, port=5000)
+        with col_ad2:
+            st.markdown("#### ➕ إنشاء حساب موظف جديد")
+            with st.form("new_ad_user_form", clear_on_submit=True):
+                new_u = st.text_input("اسم الدخول (Username)", placeholder="مثال: nora.salem")
+                new_fn = st.text_input("الاسم الكامل", placeholder="مثال: نورة سالم")
+                new_dep = st.text_input("القسم", placeholder="مثال: التسويق")
+                if st.form_submit_button("إنشاء الحساب في النطاق", use_container_width=True):
+                    if new_u.strip() and new_fn.strip() and new_dep.strip():
+                        try:
+                            conn = get_conn()
+                            conn.execute(
+                                "INSERT INTO ad_users (username, full_name, department, status, locked, last_action) VALUES (?, ?, ?, 'نشط', 0, ?)",
+                                (
+                                    new_u.strip().lower(),
+                                    new_fn.strip(),
+                                    new_dep.strip(),
+                                    f"تم إنشاء الحساب وتعيين الصلاحيات ({datetime.now().strftime('%Y-%m-%d %H:%M')})",
+                                ),
+                            )
+                            conn.commit()
+                            conn.close()
+                            st.success(f"تم إنشاء الحساب {new_u.strip().lower()}@corp.local")
+                            st.rerun()
+                        except sqlite3.IntegrityError:
+                            st.error("اسم المستخدم مسجل مسبقاً.")
+    else:
+        st.info("فعّل **لوحة فني الدعم والإدارة** من القائمة الجانبية لتنفيذ إجراءات Active Directory.")
